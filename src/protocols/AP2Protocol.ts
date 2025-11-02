@@ -1,197 +1,176 @@
 /**
- * AP2 Payment Protocol Implementation
- * 
- * AP2 (A2A Payment Protocol) is used for agent-to-agent payments
- * on the Hedera network. This protocol extends the A2A standard
- * with payment-specific functionality.
- * 
- * @see https://github.com/a2aproject/A2A
+ * AP2 (A2A Payment) Protocol
+ * Agent-to-Agent Payment Protocol for autonomous transactions
  */
 
-import { A2AMessage } from './A2AProtocol'
-import chalk from 'chalk'
-
-/**
- * AP2 Payment Request
- */
 export interface AP2PaymentRequest {
-  protocol: "AP2"
-  version: "1.0"
-  paymentId: string
+  id: string
+  from: string
+  to: string
   amount: string
-  currency: "HBAR" | "USDC"
-  recipient: string
-  network: "hedera-testnet" | "base-sepolia" | "ethereum-sepolia"
-  metadata: {
-    purpose: string
-    reference: string
-    description?: string
-  }
-  expiry: number
-  signature?: string
+  currency: string
+  network: string
+  description?: string
+  metadata?: Record<string, any>
+  createdAt: number
+  expiresAt: number
 }
 
-/**
- * AP2 Payment Response
- */
 export interface AP2PaymentResponse {
-  paymentId: string
-  status: "pending" | "processing" | "completed" | "failed" | "rejected"
+  requestId: string
+  status: 'pending' | 'approved' | 'rejected' | 'completed' | 'failed'
   transactionHash?: string
-  error?: string
+  message?: string
   timestamp: number
 }
 
-/**
- * AP2 Protocol Implementation
- */
+export interface AP2PaymentVerification {
+  requestId: string
+  transactionHash: string
+  network: string
+  verified: boolean
+  confirmations: number
+  timestamp: number
+}
+
 export class AP2Protocol {
-  /**
-   * Create an AP2 payment request
-   */
-  static createPaymentRequest(
-    paymentId: string,
-    amount: string,
-    currency: "HBAR" | "USDC",
-    recipient: string,
-    network: "hedera-testnet" | "base-sepolia" | "ethereum-sepolia",
-    metadata: { purpose: string; reference: string; description?: string }
+  private network: string
+  private currency: string
+
+  constructor(network: string = 'solana-devnet', currency: string = 'USDC') {
+    this.network = network
+    this.currency = currency
+  }
+
+  createPaymentRequest(
+    from: string,
+    to: string,
+    amount: number,
+    description?: string,
+    metadata?: Record<string, any>
   ): AP2PaymentRequest {
+    const now = Date.now()
+
     const request: AP2PaymentRequest = {
-      protocol: "AP2",
-      version: "1.0",
-      paymentId,
-      amount,
-      currency,
-      recipient,
-      network,
-      metadata,
-      expiry: Date.now() + 300000 // 5 minutes
+      id: `ap2-${now}-${Math.random().toString(36).substr(2, 9)}`,
+      from,
+      to,
+      amount: amount.toString(),
+      currency: this.currency,
+      network: this.network,
+      createdAt: now,
+      expiresAt: now + (5 * 60 * 1000)
     }
 
-    console.log(chalk.blue(`💳 Creating AP2 payment request: ${JSON.stringify(request)}`))
+    if (description !== undefined) request.description = description
+    if (metadata !== undefined) request.metadata = metadata
 
     return request
   }
 
-  /**
-   * Validate an AP2 payment request
-   */
-  static validatePaymentRequest(request: AP2PaymentRequest): { valid: boolean; error?: string } {
-    // Check protocol
-    if (request.protocol !== "AP2") {
-      return { valid: false, error: "Invalid protocol (expected AP2)" }
-    }
-
-    // Check version
-    if (request.version !== "1.0") {
-      return { valid: false, error: "Invalid version (expected 1.0)" }
-    }
-
-    // Check amount
-    const amount = parseFloat(request.amount)
-    if (isNaN(amount) || amount <= 0) {
-      return { valid: false, error: "Invalid amount" }
-    }
-
-    // Check expiry
-    if (request.expiry < Date.now()) {
-      return { valid: false, error: "Payment request expired" }
-    }
-
-    // Check metadata
-    if (!request.metadata.purpose || !request.metadata.reference) {
-      return { valid: false, error: "Missing required metadata (purpose or reference)" }
-    }
-
-    console.log(chalk.green(`✅ AP2 payment request validation passed`))
-
-    return { valid: true }
-  }
-
-  /**
-   * Create AP2 payment message for A2A protocol
-   */
-  static createAP2Message(paymentRequest: AP2PaymentRequest): any {
-    return {
-      type: "ap2_payment",
-      data: paymentRequest
-    }
-  }
-
-  /**
-   * Parse AP2 payment from A2A message
-   */
-  static parseAP2Message(message: A2AMessage): AP2PaymentRequest | null {
-    if (!message.payload || message.payload.type !== "ap2_payment") {
-      return null
-    }
-
-    return message.payload.data as AP2PaymentRequest
-  }
-
-  /**
-   * Create payment response
-   */
-  static createPaymentResponse(
-    paymentId: string,
-    status: "pending" | "processing" | "completed" | "failed" | "rejected",
+  createPaymentResponse(
+    requestId: string,
+    status: AP2PaymentResponse['status'],
     transactionHash?: string,
-    error?: string
+    message?: string
   ): AP2PaymentResponse {
     const response: AP2PaymentResponse = {
-      paymentId,
+      requestId,
       status,
-      ...(transactionHash !== undefined && { transactionHash }),
-      ...(error !== undefined && { error }),
       timestamp: Date.now()
     }
 
-    console.log(chalk.blue(`📋 AP2 payment response: ${JSON.stringify(response)}`))
+    if (transactionHash !== undefined) response.transactionHash = transactionHash
+    if (message !== undefined) response.message = message
 
     return response
   }
 
-  /**
-   * Format payment amount for display
-   */
-  static formatAmount(amount: string, currency: string): string {
-    const numAmount = parseFloat(amount)
-    
-    if (currency === "HBAR") {
-      return `${numAmount} ${currency}`
-    } else if (currency === "USDC") {
-      return `${numAmount} ${currency}`
+  verifyPayment(
+    requestId: string,
+    transactionHash: string,
+    verified: boolean,
+    confirmations: number = 0
+  ): AP2PaymentVerification {
+    return {
+      requestId,
+      transactionHash,
+      network: this.network,
+      verified,
+      confirmations,
+      timestamp: Date.now()
     }
-    
-    return `${amount} ${currency}`
   }
 
-  /**
-   * Check if payment request matches response
-   */
-  static matches(request: AP2PaymentRequest, response: AP2PaymentResponse): boolean {
-    return request.paymentId === response.paymentId
+  isExpired(request: AP2PaymentRequest): boolean {
+    return Date.now() > request.expiresAt
+  }
+
+  validateRequest(request: AP2PaymentRequest): { valid: boolean; errors: string[] } {
+    const errors: string[] = []
+
+    if (!request.id) errors.push('Missing request ID')
+    if (!request.from) errors.push('Missing sender address')
+    if (!request.to) errors.push('Missing recipient address')
+    if (!request.amount || Number(request.amount) <= 0) {
+      errors.push('Invalid amount')
+    }
+    if (!request.currency) errors.push('Missing currency')
+    if (!request.network) errors.push('Missing network')
+    if (this.isExpired(request)) errors.push('Request expired')
+
+    return {
+      valid: errors.length === 0,
+      errors
+    }
+  }
+
+  encodeRequest(request: AP2PaymentRequest): string {
+    return Buffer.from(JSON.stringify(request)).toString('base64')
+  }
+
+  decodeRequest(encoded: string): AP2PaymentRequest {
+    const json = Buffer.from(encoded, 'base64').toString('utf-8')
+    return JSON.parse(json) as AP2PaymentRequest
   }
 }
 
-/**
- * AP2 Payment Flow:
- * 
- * 1. Agent A creates AP2 payment request
- *    → createsPaymentRequest({ amount: "1000000", currency: "USDC", ... })
- * 
- * 2. Agent A sends AP2 message via A2A protocol
- *    → wraps payment request in A2A message
- *    → sends to Agent B
- * 
- * 3. Agent B receives AP2 payment request
- *    → validates request
- *    → processes payment (or rejects)
- *    → sends AP2 payment response
- * 
- * 4. Agent A receives AP2 payment response
- *    → checks status (completed/failed/rejected)
- *    → records transaction hash if completed
- */
+export class AP2PaymentNegotiation {
+  private requests: Map<string, AP2PaymentRequest>
+  private responses: Map<string, AP2PaymentResponse>
 
+  constructor() {
+    this.requests = new Map()
+    this.responses = new Map()
+  }
+
+  proposePayment(request: AP2PaymentRequest): void {
+    this.requests.set(request.id, request)
+  }
+
+  respondToPayment(response: AP2PaymentResponse): void {
+    this.responses.set(response.requestId, response)
+  }
+
+  getRequest(requestId: string): AP2PaymentRequest | undefined {
+    return this.requests.get(requestId)
+  }
+
+  getResponse(requestId: string): AP2PaymentResponse | undefined {
+    return this.responses.get(requestId)
+  }
+
+  clearExpiredRequests(): number {
+    let cleared = 0
+    const now = Date.now()
+
+    for (const [id, request] of this.requests.entries()) {
+      if (request.expiresAt < now) {
+        this.requests.delete(id)
+        cleared++
+      }
+    }
+
+    return cleared
+  }
+}

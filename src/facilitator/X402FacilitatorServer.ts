@@ -1,5 +1,9 @@
-import { Connection, PublicKey, Transaction, SystemProgram, Keypair, sendAndConfirmTransaction } from '@solana/web3.js'
-import { getAssociatedTokenAddress, createTransferInstruction, getAccount } from '@solana/spl-token'
+import { Connection, PublicKey, Transaction, Keypair, sendAndConfirmTransaction } from '@solana/web3.js'
+import {
+  Token,
+  TOKEN_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID
+} from '@solana/spl-token'
 import { loadEnvIfNeeded } from '../utils/env'
 import chalk from 'chalk'
 import bs58 from 'bs58'
@@ -154,41 +158,38 @@ export class X402FacilitatorServer {
       }
 
       const recipientAddress = new PublicKey(authorization.to)
-      const amount = BigInt(authorization.value)
+      const amount = Number(authorization.value)
 
-      const fromTokenAccount = await getAssociatedTokenAddress(
+      const token = new Token(
+        this.connection,
         this.usdcMint,
+        TOKEN_PROGRAM_ID,
+        this.agentWallet
+      )
+
+      const fromTokenAccount = await token.getOrCreateAssociatedAccountInfo(
         this.agentWallet.publicKey
       )
 
-      const toTokenAccount = await getAssociatedTokenAddress(
-        this.usdcMint,
+      const toTokenAccount = await token.getOrCreateAssociatedAccountInfo(
         recipientAddress
       )
 
-      const fromAccount = await getAccount(this.connection, fromTokenAccount)
-      console.log(chalk.blue(`📋 Current USDC balance: ${Number(fromAccount.amount) / 1_000_000} USDC`))
-      console.log(chalk.blue(`📋 Transfer amount: ${Number(amount) / 1_000_000} USDC`))
+      console.log(chalk.blue(`📋 Current USDC balance: ${Number(fromTokenAccount.amount) / 1_000_000} USDC`))
+      console.log(chalk.blue(`📋 Transfer amount: ${amount / 1_000_000} USDC`))
       console.log(chalk.blue(`📋 Recipient: ${recipientAddress.toBase58()}`))
 
-      if (fromAccount.amount < amount) {
-        throw new Error(`Insufficient USDC balance: ${Number(fromAccount.amount) / 1_000_000} < ${Number(amount) / 1_000_000}`)
+      if (Number(fromTokenAccount.amount) < amount) {
+        throw new Error(`Insufficient USDC balance: ${Number(fromTokenAccount.amount) / 1_000_000} < ${amount / 1_000_000}`)
       }
 
-      const transaction = new Transaction().add(
-        createTransferInstruction(
-          fromTokenAccount,
-          toTokenAccount,
-          this.agentWallet.publicKey,
-          amount
-        )
-      )
-
       console.log(chalk.yellow('📋 Submitting transaction...'))
-      const signature = await sendAndConfirmTransaction(
-        this.connection,
-        transaction,
-        [this.agentWallet]
+      const signature = await token.transfer(
+        fromTokenAccount.address,
+        toTokenAccount.address,
+        this.agentWallet,
+        [],
+        amount
       )
 
       console.log(chalk.green(`✅ Transfer confirmed: ${signature}`))
