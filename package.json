@@ -74,11 +74,8 @@
   },
   "homepage": "https://github.com/4n0nn43x/Aether#readme",
   "dependencies": {
-    "@solana/web3.js": "^2.0.0",
+    "@solana/web3.js": "^1.95.5",
     "@solana/spl-token": "^0.4.9",
-    "@faremeter/payment-solana": "latest",
-    "@faremeter/fetch": "latest",
-    "@faremeter/info": "latest",
     "@langchain/core": "^1.0.1",
     "@langchain/ollama": "^1.0.0",
     "@langchain/openai": "^1.0.0",
