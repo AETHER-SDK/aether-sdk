@@ -1,347 +1,204 @@
-# API Reference - Hedron Agent System
+# Aether API Reference
 
-Complete API documentation for all agents and their methods.
-
-## Table of Contents
-
-1. [AnalyzerAgent](#analyzeragent)
-2. [VerifierAgent](#verifieragent)
-3. [SettlementAgent](#settlementagent)
-4. [Message Types](#message-types)
-5. [Error Handling](#error-handling)
-6. [Configuration](#configuration)
+Complete API documentation for the Aether SDK.
 
 ---
 
-## AnalyzerAgent
+## Installation
 
-The AnalyzerAgent is responsible for querying Hedera account information and generating analysis proposals.
-
-### Constructor
-
-```typescript
-constructor();
-```
-
-**Description**: Initializes the AnalyzerAgent with credentials from environment variables.
-
-**Environment Variables Required**:
-
-- `ANALYZER_AGENT_ID`: Hedera account ID for the agent
-- `ANALYZER_PRIVATE_KEY`: Private key for the agent
-- `HEDERA_ACCOUNT_ID`: Fallback main account ID
-- `HEDERA_PRIVATE_KEY`: Fallback main private key
-
-**Example**:
-
-```typescript
-const analyzer = new AnalyzerAgent();
-```
-
-### Methods
-
-#### `async init(): Promise<void>`
-
-**Description**: Initializes the agent and verifies connection to Hedera testnet.
-
-**Returns**: `Promise<void>`
-
-**Throws**:
-
-- `Error`: If initialization fails
-- `Error`: If credentials are invalid
-
-**Example**:
-
-```typescript
-await analyzer.init();
-// Output: 🔗 AnalyzerAgent initialized for Hedera testnet
-```
-
-#### `async queryAccount(accountId: string): Promise<AccountInfo>`
-
-**Description**: Queries account information using Hedera SDK.
-
-**Parameters**:
-
-- `accountId` (string): Hedera account ID (e.g., "0.0.123456")
-
-**Returns**: `Promise<AccountInfo>`
-
-**AccountInfo Interface**:
-
-```typescript
-interface AccountInfo {
-  accountId: string;
-  balance: string;
-  key: string;
-  isDeleted: boolean;
-  autoRenewPeriod: string;
-}
-```
-
-**Throws**:
-
-- `Error`: If account query fails
-- `Error`: If account ID is invalid
-
-**Example**:
-
-```typescript
-const accountData = await analyzer.queryAccount("0.0.123456");
-console.log("Balance:", accountData.balance);
-// Output: Balance: 3446.12525862 ℏ
-```
-
-#### `async queryAccountViaMirror(accountId: string): Promise<any>`
-
-**Description**: Queries account information via Hedera Mirror Node API.
-
-**Parameters**:
-
-- `accountId` (string): Hedera account ID
-
-**Returns**: `Promise<any>` - Raw mirror node response data
-
-**Throws**:
-
-- `Error`: If mirror node query fails
-- `Error`: If network request fails
-
-**Example**:
-
-```typescript
-const mirrorData = await analyzer.queryAccountViaMirror("0.0.123456");
-console.log("Mirror data:", mirrorData);
-```
-
-#### `getHcsClient(): HCS10Client`
-
-**Description**: Returns the HCS client for sending messages.
-
-**Returns**: `HCS10Client` instance
-
-**Throws**:
-
-- `Error`: If HCS client is not available (demo mode)
-
-**Example**:
-
-```typescript
-const hcsClient = analyzer.getHcsClient();
-await hcsClient.sendMessage(topicId, message);
+```bash
+npm install aether-agent-sdk
 ```
 
 ---
 
-## VerifierAgent
+## Core Modules
 
-The VerifierAgent validates analysis proposals and makes approval decisions.
+### X402FacilitatorServer
 
-### Constructor
+Handles x402 payment verification and settlement on Solana.
 
-```typescript
-constructor();
-```
-
-**Description**: Initializes the VerifierAgent with credentials from environment variables.
-
-**Environment Variables Required**:
-
-- `VERIFIER_AGENT_ID`: Hedera account ID for the agent
-- `VERIFIER_PRIVATE_KEY`: Private key for the agent
-- `VERIFIER_TOPIC_ID`: HCS topic ID for receiving messages
-- `SETTLEMENT_TOPIC_ID`: HCS topic ID for sending verification results
-
-**Example**:
+#### Constructor
 
 ```typescript
-const verifier = new VerifierAgent();
+new X402FacilitatorServer()
 ```
 
-### Methods
+Initializes the facilitator with environment configuration.
 
-#### `async init(): Promise<void>`
+**Environment Variables:**
+- `SOLANA_RPC_URL` - Solana RPC endpoint
+- `AGENT_PRIVATE_KEY` - Agent wallet private key (base58)
+- `USDC_MINT` - USDC token mint address
 
-**Description**: Initializes the agent and starts message polling.
+#### Methods
 
-**Returns**: `Promise<void>`
+##### `verify(paymentHeader: string, paymentRequirements: any): Promise<any>`
 
-**Throws**:
+Verifies a payment without executing it.
 
-- `Error`: If initialization fails
-- `Error`: If topic ID is missing
+**Parameters:**
+- `paymentHeader` - Base64 encoded payment payload
+- `paymentRequirements` - Payment requirements object
 
-**Example**:
-
+**Returns:**
 ```typescript
-await verifier.init();
-// Output: VerifierAgent initialized and ready to process messages
-// Output: 🔄 Polling for messages every 5 seconds...
-```
-
-#### `onMessage(type: string, handler: Function): void`
-
-**Description**: Registers a custom message handler for specific message types.
-
-**Parameters**:
-
-- `type` (string): Message type to handle
-- `handler` (Function): Handler function to call when message is received
-
-**Returns**: `void`
-
-**Example**:
-
-```typescript
-verifier.onMessage("custom_proposal", async (proposal) => {
-  console.log("Custom proposal received:", proposal);
-  // Custom validation logic
-});
-```
-
-### Internal Methods
-
-#### `private async validateProposal(proposal: AnalysisProposal): Promise<void>`
-
-**Description**: Validates analysis proposals and sends verification results.
-
-**Parameters**:
-
-- `proposal` (AnalysisProposal): The proposal to validate
-
-**Business Logic**:
-
-- Approval criteria: `proposal.meetsThreshold === true`
-- Sends verification result to SettlementAgent on approval
-- Logs rejection for non-approved proposals
-
----
-
-## SettlementAgent
-
-The SettlementAgent executes payments and records settlement completion.
-
-### Constructor
-
-```typescript
-constructor();
-```
-
-**Description**: Initializes the SettlementAgent with credentials and wallet configuration.
-
-**Environment Variables Required**:
-
-- `SETTLEMENT_AGENT_ID`: Hedera account ID for the agent
-- `SETTLEMENT_PRIVATE_KEY`: Private key for the agent
-- `SETTLEMENT_TOPIC_ID`: HCS topic ID for receiving messages
-- `BASE_RPC_URL`: Base Sepolia RPC endpoint
-- `SETTLEMENT_WALLET_PRIVATE_KEY`: Ethereum wallet private key
-- `USDC_CONTRACT`: USDC contract address
-- `MERCHANT_WALLET_ADDRESS`: Merchant wallet address
-- `ANALYZER_TOPIC_ID`: HCS topic ID for sending settlement records
-
-**Example**:
-
-```typescript
-const settlement = new SettlementAgent();
-```
-
-### Methods
-
-#### `async init(): Promise<void>`
-
-**Description**: Initializes the agent and starts message polling.
-
-**Returns**: `Promise<void>`
-
-**Throws**:
-
-- `Error`: If initialization fails
-- `Error`: If required environment variables are missing
-
-**Example**:
-
-```typescript
-await settlement.init();
-// Output: SettlementAgent initialized for Hedera testnet
-// Output: 📡 Agent is now listening for verification results...
-```
-
-### Internal Methods
-
-#### `private async executeSettlement(verification: VerificationResult): Promise<void>`
-
-**Description**: Executes x402 payments when verification is approved.
-
-**Parameters**:
-
-- `verification` (VerificationResult): The verification result containing approval
-
-**Process**:
-
-1. Creates x402 payment requirements
-2. Executes payment via a2a-x402 library
-3. Records settlement completion
-
-**Payment Configuration**:
-
-```typescript
-const requirements = {
-  scheme: "exact" as const,
-  network: "base-sepolia" as const,
-  asset: process.env.USDC_CONTRACT,
-  payTo: process.env.MERCHANT_WALLET_ADDRESS,
-  maxAmountRequired: "10000000", // 10 USDC
-  resource: "/agent-settlement",
-  description: "A2A agent settlement",
-  mimeType: "application/json",
-  maxTimeoutSeconds: 120,
-};
-```
-
-#### `private async recordSettlement(txHash: string, amount: number): Promise<void>`
-
-**Description**: Records settlement completion on HCS.
-
-**Parameters**:
-
-- `txHash` (string): Transaction hash of the payment
-- `amount` (number): Amount settled in USDC
-
-**Process**:
-
-1. Creates settlement record
-2. Broadcasts to HCS topic
-3. Confirms completion
-
----
-
-## Message Types
-
-### Analysis Proposal
-
-```typescript
-interface AnalysisProposal {
-  type: "analysis_proposal";
-  accountId: string;
-  balance: string;
-  threshold: number;
-  meetsThreshold: boolean;
-  timestamp: number;
-}
-```
-
-**Example**:
-
-```json
 {
-  "type": "analysis_proposal",
-  "accountId": "0.0.123456",
-  "balance": "3446.12525862 ℏ",
-  "threshold": 50,
-  "meetsThreshold": true,
-  "timestamp": 1703123456789
+  isValid: boolean
+  invalidReason: string | null
+}
+```
+
+**Example:**
+```typescript
+const facilitator = new X402FacilitatorServer()
+const result = await facilitator.verify(paymentHeader, requirements)
+
+if (result.isValid) {
+  console.log('Payment is valid')
+}
+```
+
+##### `settle(paymentHeader: string, paymentRequirements: any): Promise<any>`
+
+Settles a payment by executing the USDC transfer.
+
+**Parameters:**
+- `paymentHeader` - Base64 encoded payment payload
+- `paymentRequirements` - Payment requirements object
+
+**Returns:**
+```typescript
+{
+  success: boolean
+  error: string | null
+  txHash: string | null
+  networkId: string | null
+}
+```
+
+**Example:**
+```typescript
+const result = await facilitator.settle(paymentHeader, requirements)
+
+if (result.success) {
+  console.log('Transaction:', result.txHash)
+}
+```
+
+##### `getSupportedSchemes(): { kinds: Array<{ scheme: string; network: string }> }`
+
+Returns supported payment schemes.
+
+**Returns:**
+```typescript
+{
+  kinds: [
+    { scheme: 'exact', network: 'solana-devnet' }
+  ]
+}
+```
+
+---
+
+### SettlementAgent
+
+Manages autonomous agent payments on Solana.
+
+#### Constructor
+
+```typescript
+new SettlementAgent()
+```
+
+**Environment Variables:**
+- `SOLANA_RPC_URL` - Solana RPC endpoint
+- `AGENT_PRIVATE_KEY` - Agent wallet private key
+- `MERCHANT_WALLET_ADDRESS` - Default merchant address
+- `DEFAULT_PAYMENT_AMOUNT_USDC` - Default payment amount
+
+#### Methods
+
+##### `init(): Promise<void>`
+
+Initializes the settlement agent.
+
+**Example:**
+```typescript
+const agent = new SettlementAgent()
+await agent.init()
+```
+
+##### `triggerSettlement(verification: any): Promise<void>`
+
+Triggers a payment settlement.
+
+**Parameters:**
+- `verification` - Verification result object
+
+**Example:**
+```typescript
+await agent.triggerSettlement({ approved: true, amount: 1.0 })
+```
+
+##### `executeSolanaTransfer(recipientAddress: string, amountUsdc: number): Promise<string | null>`
+
+Executes a direct USDC transfer.
+
+**Parameters:**
+- `recipientAddress` - Recipient's Solana wallet address
+- `amountUsdc` - Amount in USDC (e.g., 1.0 for 1 USDC)
+
+**Returns:**
+- Transaction signature (string) or null on failure
+
+**Example:**
+```typescript
+const signature = await agent.executeSolanaTransfer(
+  'merchant_wallet_address',
+  1.0
+)
+
+console.log('Transaction:', signature)
+// https://explorer.solana.com/tx/{signature}?cluster=devnet
+```
+
+---
+
+## Data Types
+
+### Payment Requirements
+
+```typescript
+interface PaymentRequirements {
+  scheme: 'exact'
+  network: 'solana-devnet' | 'solana-mainnet'
+  asset: string              // USDC mint address
+  payTo: string              // Recipient wallet address
+  maxAmountRequired: string  // Amount in micro-USDC (1 USDC = 1,000,000)
+  resource: string           // Payment description
+  description: string        // Human-readable description
+  mimeType: string          // Response content type
+  maxTimeoutSeconds: number  // Payment validity period
+}
+```
+
+### Payment Payload
+
+```typescript
+interface PaymentPayload {
+  x402Version: 1
+  scheme: 'exact'
+  network: 'solana-devnet' | 'solana-mainnet'
+  payload: {
+    authorization: {
+      from: string      // Sender wallet (base58)
+      to: string        // Recipient wallet (base58)
+      value: string     // Amount in micro-USDC
+      asset: string     // USDC mint address
+      validBefore: number // Unix timestamp
+    }
+  }
 }
 ```
 
@@ -349,308 +206,177 @@ interface AnalysisProposal {
 
 ```typescript
 interface VerificationResult {
-  type: "verification_result";
-  originalProposal: AnalysisProposal;
-  approved: boolean;
-  reasoning: string;
-  timestamp: number;
+  isValid: boolean
+  invalidReason: string | null
 }
 ```
 
-**Example**:
+### Settlement Result
 
-```json
-{
-  "type": "verification_result",
-  "originalProposal": {
-    "type": "analysis_proposal",
-    "accountId": "0.0.123456",
-    "balance": "3446.12525862 ℏ",
-    "threshold": 50,
-    "meetsThreshold": true,
-    "timestamp": 1703123456789
-  },
-  "approved": true,
-  "reasoning": "Proposal approved: meets threshold requirements (true)",
-  "timestamp": 1703123456790
+```typescript
+interface SettlementResult {
+  success: boolean
+  error: string | null
+  txHash: string | null      // Solana transaction signature
+  networkId: string | null   // 'solana-devnet' or 'solana-mainnet'
 }
-```
-
-### Settlement Complete
-
-```typescript
-interface SettlementRecord {
-  type: "settlement_complete";
-  txHash: string;
-  amount: string;
-  timestamp: number;
-}
-```
-
-**Example**:
-
-```json
-{
-  "type": "settlement_complete",
-  "txHash": "0x1234567890abcdef...",
-  "amount": "10 USDC",
-  "timestamp": 1703123456791
-}
-```
-
----
-
-## Error Handling
-
-### Common Error Types
-
-#### Credential Errors
-
-```typescript
-// Missing credentials
-Error: Missing required environment variables: HEDERA_ACCOUNT_ID and HEDERA_PRIVATE_KEY
-
-// Invalid private key format
-Error: Invalid private key format. Tried DER, ED25519, and ECDSA formats.
-
-// Account access failure
-Error: Failed to verify account access. Please check your credentials.
-```
-
-#### Network Errors
-
-```typescript
-// Hedera connection failure
-Error: Failed to connect to Hedera testnet
-
-// Mirror node failure
-Error: Failed to query account 0.0.123456 via mirror node
-
-// HCS message failure
-Error: Failed to send message: Failed to retrieve profile
-```
-
-#### Payment Errors
-
-```typescript
-// Settlement execution failure
-Error: Error executing settlement: Insufficient funds
-
-// x402 protocol error
-Error: Payment execution failed: Invalid requirements
-```
-
-### Error Handling Patterns
-
-#### Graceful Degradation
-
-```typescript
-// Fallback to main account credentials
-if (privateKey.startsWith("placeholder-key-for-")) {
-  console.warn(
-    "⚠️  Using placeholder private key. Falling back to main account."
-  );
-  this.hcsClient = new HCS10Client(mainAccountId, mainPrivateKey, "testnet");
-}
-```
-
-#### Demo Mode
-
-```typescript
-// Demo mode for missing credentials
-if (!this.hederaClient || !this.hcsClient) {
-  console.log("🔗 AnalyzerAgent initialized in demo mode");
-  return;
-}
-```
-
-#### Retry Logic
-
-```typescript
-// Exponential backoff for network requests
-try {
-  const result = await this.hcsClient.getMessages(topicId);
-} catch (error) {
-  console.error("❌ Error polling for messages:", error);
-  // Retry on next interval
-}
-```
-
----
-
-## Configuration
-
-### Environment Variables
-
-#### Required Variables
-
-```bash
-# Hedera Configuration
-HEDERA_ACCOUNT_ID=0.0.123456
-HEDERA_PRIVATE_KEY=302e020100300506032b657004220420...
-
-# Agent Credentials (Auto-generated)
-ANALYZER_AGENT_ID=0.0.789012
-ANALYZER_TOPIC_ID=0.0.345678
-ANALYZER_PRIVATE_KEY=agent_private_key
-
-VERIFIER_AGENT_ID=0.0.789013
-VERIFIER_TOPIC_ID=0.0.345679
-VERIFIER_PRIVATE_KEY=agent_private_key
-
-SETTLEMENT_AGENT_ID=0.0.789014
-SETTLEMENT_TOPIC_ID=0.0.345680
-SETTLEMENT_PRIVATE_KEY=agent_private_key
-
-# Settlement Configuration
-BASE_RPC_URL=https://sepolia.base.org
-SETTLEMENT_WALLET_PRIVATE_KEY=0x...
-USDC_CONTRACT=0x036CbD53842c5426634e7929541eC2318f3dCF7e
-MERCHANT_WALLET_ADDRESS=0x...
-```
-
-#### Optional Variables
-
-```bash
-# Debug mode
-DEBUG=hedron-agent-sdk:*
-
-# Custom polling interval (default: 5000ms)
-POLLING_INTERVAL=5000
-
-# Custom timeout (default: 120s)
-PAYMENT_TIMEOUT=120
-```
-
-### Network Configuration
-
-#### Hedera Testnet
-
-```typescript
-// Client configuration
-const client = Client.forTestnet();
-client.setOperator(AccountId.fromString(accountId), privateKey);
-
-// Mirror node URL
-const MIRROR_NODE_URL = "https://testnet.mirrornode.hedera.com";
-```
-
-#### Base Sepolia
-
-```typescript
-// Provider configuration
-const provider = new JsonRpcProvider("https://sepolia.base.org");
-const wallet = new Wallet(privateKey, provider);
-
-// USDC contract
-const USDC_CONTRACT = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
 ```
 
 ---
 
 ## Usage Examples
 
-### Basic Agent Initialization
+### Basic Payment Flow
 
 ```typescript
-import { AnalyzerAgent, VerifierAgent, SettlementAgent } from "./src/agents";
+import { SettlementAgent } from 'aether-agent-sdk'
 
-async function initializeAgents() {
-  const analyzer = new AnalyzerAgent();
-  const verifier = new VerifierAgent();
-  const settlement = new SettlementAgent();
+const agent = new SettlementAgent()
+await agent.init()
 
-  await analyzer.init();
-  await verifier.init();
-  await settlement.init();
+const merchantAddress = 'merchant_wallet_here'
+const amount = 1.0 // USDC
 
-  console.log("All agents initialized successfully");
+const txHash = await agent.executeSolanaTransfer(merchantAddress, amount)
+
+if (txHash) {
+  console.log(`Payment successful: ${txHash}`)
+  console.log(`Explorer: https://explorer.solana.com/tx/${txHash}?cluster=devnet`)
 }
 ```
 
-### Custom Message Handling
+### Custom Payment Requirements
 
 ```typescript
-// Register custom handler
-verifier.onMessage("custom_proposal", async (proposal) => {
-  console.log("Custom proposal received:", proposal);
+import { X402FacilitatorServer } from 'aether-agent-sdk'
 
-  // Custom validation logic
-  const isValid = await validateCustomProposal(proposal);
+const facilitator = new X402FacilitatorServer()
 
-  if (isValid) {
-    // Send custom response
-    await verifier.getHcsClient().sendMessage(
-      process.env.CUSTOM_TOPIC_ID!,
-      JSON.stringify({
-        type: "custom_response",
-        proposal: proposal,
-        validated: true,
-        timestamp: Date.now(),
-      })
-    );
+const requirements = {
+  scheme: 'exact' as const,
+  network: 'solana-devnet',
+  asset: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+  payTo: 'merchant_wallet',
+  maxAmountRequired: '1000000', // 1 USDC
+  resource: '/api/data',
+  description: 'Payment for API access',
+  mimeType: 'application/json',
+  maxTimeoutSeconds: 120
+}
+
+const paymentPayload = {
+  x402Version: 1,
+  scheme: 'exact',
+  network: 'solana-devnet',
+  payload: {
+    authorization: {
+      from: 'agent_wallet',
+      to: 'merchant_wallet',
+      value: '1000000',
+      asset: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+      validBefore: Math.floor(Date.now() / 1000) + 120
+    }
   }
-});
+}
+
+const paymentHeader = Buffer.from(JSON.stringify(paymentPayload)).toString('base64')
+
+const verification = await facilitator.verify(paymentHeader, requirements)
+if (verification.isValid) {
+  const settlement = await facilitator.settle(paymentHeader, requirements)
+  console.log('Transaction:', settlement.txHash)
+}
 ```
 
-### Manual Message Sending
-
-```typescript
-// Send analysis proposal manually
-const proposal = {
-  type: "analysis_proposal",
-  accountId: "0.0.123456",
-  balance: "100 ℏ",
-  threshold: 50,
-  meetsThreshold: true,
-  timestamp: Date.now(),
-};
-
-await analyzer
-  .getHcsClient()
-  .sendMessage(process.env.VERIFIER_TOPIC_ID!, JSON.stringify(proposal));
-```
-
-### Error Handling Example
+### Error Handling
 
 ```typescript
 try {
-  const accountData = await analyzer.queryAccount("0.0.123456");
-  console.log("Account balance:", accountData.balance);
-} catch (error) {
-  if (error.message.includes("INVALID_ACCOUNT_ID")) {
-    console.error("Invalid account ID provided");
-  } else if (error.message.includes("NETWORK_ERROR")) {
-    console.error("Network connection failed");
-  } else {
-    console.error("Unexpected error:", error);
+  const agent = new SettlementAgent()
+  await agent.init()
+
+  const txHash = await agent.executeSolanaTransfer(
+    recipientAddress,
+    amount
+  )
+
+  if (!txHash) {
+    throw new Error('Payment failed')
   }
+
+  console.log('Success:', txHash)
+} catch (error) {
+  console.error('Payment error:', error.message)
+  // Handle error appropriately
 }
 ```
 
 ---
 
-## Performance Considerations
+## Constants
 
-### Polling Intervals
+### USDC Mint Addresses
 
-- **Default**: 5 seconds
-- **Customizable**: Via `POLLING_INTERVAL` environment variable
-- **Impact**: Lower intervals = higher responsiveness, higher resource usage
+```typescript
+const USDC_DEVNET = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'
+const USDC_MAINNET = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+```
 
-### Timeout Settings
+### Network Identifiers
 
-- **Payment Timeout**: 120 seconds (default)
-- **Network Timeout**: 30 seconds (default)
-- **Retry Attempts**: 3 attempts with exponential backoff
+```typescript
+const SOLANA_DEVNET = 'solana-devnet'
+const SOLANA_MAINNET = 'solana-mainnet'
+```
 
-### Resource Usage
+### Amount Conversion
 
-- **Memory**: ~50MB per agent instance
-- **CPU**: Low usage for polling operations
-- **Network**: Efficient HCS message batching
+```typescript
+// USDC has 6 decimals
+const usdcToMicroUsdc = (usdc: number) => Math.floor(usdc * 1_000_000)
+const microUsdcToUsdc = (micro: number) => micro / 1_000_000
+
+// Example
+const amount = 1.5 // USDC
+const microAmount = usdcToMicroUsdc(amount) // 1500000
+```
 
 ---
 
-_Last Updated: December 2024_
-_Version: 1.0.0_
+## TypeScript Support
+
+Aether is written in TypeScript and provides full type definitions.
+
+```typescript
+import type {
+  PaymentRequirements,
+  PaymentPayload,
+  VerificationResult,
+  SettlementResult
+} from 'aether-agent-sdk'
+```
+
+---
+
+## Error Messages
+
+Common error messages and solutions:
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| "Agent wallet not initialized" | Missing private key | Set `AGENT_PRIVATE_KEY` in .env |
+| "Insufficient USDC balance" | Not enough tokens | Get USDC from faucet |
+| "Payment verification failed" | Invalid payload | Check payment structure |
+| "Invalid base58 string" | Wrong key format | Convert key to base58 |
+
+---
+
+## Next Steps
+
+- Read [Usage Guide](./USAGE_GUIDE.md) for practical examples
+- Learn about [x402 Integration](./X402_GUIDE.md)
+- Check [Setup Guide](./SETUP_GUIDE.md) for configuration
+
+---
+
+**Complete API reference for building autonomous agents on Solana** 🚀

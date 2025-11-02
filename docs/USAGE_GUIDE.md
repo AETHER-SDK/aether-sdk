@@ -1,272 +1,459 @@
-# Hedron Usage Guide
+# Aether Usage Guide
 
-Complete guide to using Hedron for autonomous agent workflows, x402 payments, and multi-protocol integrations.
-
----
-
-## 🚀 Getting Started
-
-### 1. Installation
-
-```bash
-git clone https://github.com/Hebx/hedera-a2a-agents.git
-cd hedera-a2a-agents
-npm install
-cp env.example .env
-```
-
-### 2. Configuration
-
-Edit `.env` with your credentials:
-
-```bash
-# Hedera Network
-HEDERA_ACCOUNT_ID=0.0.XXXXXX
-HEDERA_PRIVATE_KEY=302e0201...
-
-# Payment Configuration
-PAYMENT_NETWORK=base-sepolia  # or 'hedera-testnet'
-USDC_CONTRACT=0x036CbD53842c5426634e7929541eC2318f3dCF7e
-MERCHANT_WALLET_ADDRESS=0x...
-
-# Base Sepolia (for USDC)
-SETTLEMENT_WALLET_PRIVATE_KEY=0x...
-BASE_RPC_URL=https://sepolia.base.org
-
-# AI Integration (optional)
-OPENAI_API_KEY=sk-...  # For LLM reasoning
-```
-
-### 3. Setup HCS-11 Profile
-
-```bash
-npm run setup:hcs11-fixed
-```
-
-See [HCS-11 Setup Guide](./HCS11_SETUP_GUIDE.md) for detailed instructions.
+Practical examples and patterns for building with Aether.
 
 ---
 
-## 💡 Common Use Cases
+## Basic Usage
 
-### Use Case 1: Autonomous Invoice Processing
+### Simple Payment
 
-**Scenario**: Automatically process invoices with AI validation.
+```typescript
+import { SettlementAgent } from 'aether-agent-sdk'
 
-```bash
-npm run demo:invoice-llm
+const agent = new SettlementAgent()
+await agent.init()
+
+const txHash = await agent.executeSolanaTransfer(
+  'merchant_wallet_address',
+  1.0 // USDC
+)
+
+console.log('Payment sent:', txHash)
 ```
 
-**Features**:
+### With Error Handling
 
-- LLM analyzes invoice context
-- Fraud detection
-- Automatic approval/rejection
-- Hedera token settlement
+```typescript
+import { SettlementAgent } from 'aether-agent-sdk'
+import chalk from 'chalk'
 
-See [Invoice Automation Guide](./BOUNTY_2_HEDERA_AGENT_KIT.md#use-case-1-invoice-automation) for details.
+async function makePayment(recipient: string, amount: number) {
+  try {
+    const agent = new SettlementAgent()
+    await agent.init()
 
-### Use Case 2: Supply Chain Negotiation
+    console.log(chalk.blue(`Sending ${amount} USDC to ${recipient}...`))
 
-**Scenario**: Autonomous multi-agent price negotiation.
+    const txHash = await agent.executeSolanaTransfer(recipient, amount)
 
-```bash
-npm run demo:negotiation
+    if (txHash) {
+      console.log(chalk.green('✅ Payment successful!'))
+      console.log(chalk.blue(`🔗 https://explorer.solana.com/tx/${txHash}?cluster=devnet`))
+      return txHash
+    } else {
+      console.log(chalk.red('❌ Payment failed'))
+      return null
+    }
+  } catch (error) {
+    console.error(chalk.red('Error:'), error.message)
+    throw error
+  }
+}
+
+// Usage
+await makePayment('merchant_address', 5.0)
 ```
-
-**Features**:
-
-- Buyer and vendor agents negotiate
-- Multiple negotiation rounds
-- Agreement recorded on Hedera
-- Automatic settlement
-
-See [Supply Chain Guide](./BOUNTY_2_HEDERA_AGENT_KIT.md#use-case-2-supply-chain-negotiation) for details.
-
-### Use Case 3: NFT Royalty Settlement
-
-**Scenario**: Automatically pay NFT creators with cross-chain x402.
-
-```bash
-npm run demo:nft-royalty 150
-```
-
-**Features**:
-
-- Automatic 10% royalty calculation
-- Cross-chain payment to creator
-- USDC on Base Sepolia
-- Transparent payment trail
-
-See [NFT Royalty Guide](./BOUNTY_1_HEDERA_X402_STANDARD.md#nft-royalty-settlement) for details.
-
-### Use Case 4: Fraud Detection & Verification
-
-**Scenario**: Secure payments with AI fraud detection and blockchain memo verification.
-
-```bash
-npm run demo:supply-chain-fraud
-```
-
-**Features**:
-
-- AI-powered fraud detection
-- Memo verification on Hedera
-- Secure settlement
-- Complete audit trail
-
-See [Fraud Detection Guide](./BOUNTY_2_HEDERA_AGENT_KIT.md#use-case-fraud-detection) for details.
 
 ---
 
-## 🔧 Configuration Options
+## Use Cases
 
-### Payment Network Selection
+### 1. API Monetization
 
-Choose between Hedera (HBAR) or Base Sepolia (USDC):
+Autonomous agents paying for API access:
 
-```bash
-# For USDC on Base Sepolia
-export PAYMENT_NETWORK=base-sepolia
+```typescript
+import { SettlementAgent } from 'aether-agent-sdk'
+import axios from 'axios'
 
-# For HBAR on Hedera
-export PAYMENT_NETWORK=hedera-testnet
+class PaidAPIClient {
+  private agent: SettlementAgent
+  private apiUrl: string
+  private merchantWallet: string
+
+  constructor(apiUrl: string, merchantWallet: string) {
+    this.agent = new SettlementAgent()
+    this.apiUrl = apiUrl
+    this.merchantWallet = merchantWallet
+  }
+
+  async init() {
+    await this.agent.init()
+  }
+
+  async callPaidEndpoint(endpoint: string, costUSDC: number) {
+    // Pay first
+    const txHash = await this.agent.executeSolanaTransfer(
+      this.merchantWallet,
+      costUSDC
+    )
+
+    if (!txHash) {
+      throw new Error('Payment failed')
+    }
+
+    // Then access the resource
+    const response = await axios.get(`${this.apiUrl}${endpoint}`, {
+      headers: {
+        'X-Payment-Tx': txHash
+      }
+    })
+
+    return response.data
+  }
+}
+
+// Usage
+const client = new PaidAPIClient(
+  'https://api.example.com',
+  'merchant_wallet'
+)
+await client.init()
+
+const data = await client.callPaidEndpoint('/premium-data', 0.10)
+console.log('Received data:', data)
 ```
 
-### Human-in-the-Loop (HITL)
+### 2. Agent Marketplace
 
-Configure approval thresholds:
+Agents buying services from other agents:
 
-```bash
-# .env
-HITL_PAYMENT_THRESHOLD=500  # Require approval for payments > $500
-HITL_ENABLED=true
+```typescript
+interface Service {
+  name: string
+  description: string
+  price: number // USDC
+  provider: string // wallet address
+}
+
+class AgentMarketplace {
+  private agent: SettlementAgent
+
+  constructor() {
+    this.agent = new SettlementAgent()
+  }
+
+  async init() {
+    await this.agent.init()
+  }
+
+  async purchaseService(service: Service): Promise<string> {
+    console.log(`Purchasing: ${service.name}`)
+    console.log(`Price: ${service.price} USDC`)
+    console.log(`Provider: ${service.provider}`)
+
+    const txHash = await this.agent.executeSolanaTransfer(
+      service.provider,
+      service.price
+    )
+
+    if (!txHash) {
+      throw new Error('Payment failed')
+    }
+
+    console.log(`✅ Purchased ${service.name}`)
+    return txHash
+  }
+}
+
+// Usage
+const marketplace = new AgentMarketplace()
+await marketplace.init()
+
+const service = {
+  name: 'Data Analysis',
+  description: 'AI-powered data analysis',
+  price: 2.50,
+  provider: 'provider_wallet_address'
+}
+
+const tx = await marketplace.purchaseService(service)
 ```
 
-See [Human-in-the-Loop Guide](./HUMAN_IN_THE_LOOP.md) for details.
+### 3. Subscription Payments
+
+Recurring payments for services:
+
+```typescript
+class SubscriptionManager {
+  private agent: SettlementAgent
+  private subscriptions: Map<string, NodeJS.Timeout>
+
+  constructor() {
+    this.agent = new SettlementAgent()
+    this.subscriptions = new Map()
+  }
+
+  async init() {
+    await this.agent.init()
+  }
+
+  async subscribe(
+    serviceId: string,
+    providerWallet: string,
+    pricePerMonth: number
+  ) {
+    // Make initial payment
+    await this.agent.executeSolanaTransfer(providerWallet, pricePerMonth)
+
+    // Schedule monthly payments
+    const interval = setInterval(async () => {
+      try {
+        const txHash = await this.agent.executeSolanaTransfer(
+          providerWallet,
+          pricePerMonth
+        )
+        console.log(`Monthly payment for ${serviceId}: ${txHash}`)
+      } catch (error) {
+        console.error(`Failed to pay for ${serviceId}:`, error)
+        this.unsubscribe(serviceId)
+      }
+    }, 30 * 24 * 60 * 60 * 1000) // 30 days
+
+    this.subscriptions.set(serviceId, interval)
+    console.log(`Subscribed to ${serviceId}`)
+  }
+
+  unsubscribe(serviceId: string) {
+    const interval = this.subscriptions.get(serviceId)
+    if (interval) {
+      clearInterval(interval)
+      this.subscriptions.delete(serviceId)
+      console.log(`Unsubscribed from ${serviceId}`)
+    }
+  }
+}
+
+// Usage
+const subscriptions = new SubscriptionManager()
+await subscriptions.init()
+
+await subscriptions.subscribe(
+  'premium-api',
+  'provider_wallet',
+  10.0 // $10/month
+)
+```
+
+### 4. Micropayments for Content
+
+Pay per use for digital content:
+
+```typescript
+class ContentPaymentGateway {
+  private agent: SettlementAgent
+
+  constructor() {
+    this.agent = new SettlementAgent()
+  }
+
+  async init() {
+    await this.agent.init()
+  }
+
+  async accessContent(
+    contentId: string,
+    creator: string,
+    price: number
+  ): Promise<any> {
+    // Pay for content
+    const txHash = await this.agent.executeSolanaTransfer(creator, price)
+
+    if (!txHash) {
+      throw new Error('Payment required to access content')
+    }
+
+    // Fetch content with proof of payment
+    const response = await fetch(`/api/content/${contentId}`, {
+      headers: {
+        'X-Payment-Proof': txHash
+      }
+    })
+
+    return await response.json()
+  }
+}
+
+// Usage
+const gateway = new ContentPaymentGateway()
+await gateway.init()
+
+const article = await gateway.accessContent(
+  'article-123',
+  'creator_wallet',
+  0.05 // 5 cents
+)
+
+console.log('Article:', article)
+```
 
 ---
 
-## 📡 Agent Communication
+## Integration Patterns
 
-### A2A Protocol
+### Express.js API
 
-Agents communicate via Hedera Consensus Service (HCS) using the A2A protocol.
+```typescript
+import express from 'express'
+import { X402FacilitatorServer } from 'aether-agent-sdk'
 
-See [A2A Protocol Implementation](./A2A_PROTOCOL_IMPLEMENTATION.md) for details.
+const app = express()
+app.use(express.json())
 
-### Payment Protocols
+const facilitator = new X402FacilitatorServer()
 
-- **AP2**: Agent-to-agent payment negotiations
-- **x402**: Autonomous payment settlement
+// Middleware to check payment
+async function requirePayment(req, res, next) {
+  const paymentTx = req.headers['x-payment-tx']
 
-See [x402 Payment Standard](./BOUNTY_1_HEDERA_X402_STANDARD.md) for details.
+  if (!paymentTx) {
+    return res.status(402).json({
+      error: 'Payment Required',
+      paymentRequirements: {
+        scheme: 'exact',
+        network: 'solana-devnet',
+        asset: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+        payTo: process.env.MERCHANT_WALLET_ADDRESS,
+        maxAmountRequired: '1000000',
+        resource: req.path,
+        description: 'API access',
+        mimeType: 'application/json',
+        maxTimeoutSeconds: 120
+      }
+    })
+  }
+
+  // Verify transaction on Solana
+  // (implementation depends on your verification logic)
+  next()
+}
+
+// Protected endpoint
+app.get('/api/premium-data', requirePayment, (req, res) => {
+  res.json({ data: 'premium content' })
+})
+
+app.listen(3000, () => {
+  console.log('API server running on port 3000')
+})
+```
+
+### React Frontend
+
+```typescript
+import { Connection, PublicKey } from '@solana/web3.js'
+import { getAssociatedTokenAddress, getAccount } from '@solana/spl-token'
+
+function PaymentButton({ amount, recipient, onSuccess }) {
+  const [loading, setLoading] = useState(false)
+
+  const handlePayment = async () => {
+    setLoading(true)
+
+    try {
+      // Connect wallet (using Phantom, Solflare, etc.)
+      const { solana } = window
+      const publicKey = await solana.connect()
+
+      // Create payment transaction
+      // (implementation depends on your wallet adapter)
+
+      const signature = await sendTransaction(/* ... */)
+
+      // Wait for confirmation
+      await connection.confirmTransaction(signature)
+
+      onSuccess(signature)
+    } catch (error) {
+      console.error('Payment failed:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <button onClick={handlePayment} disabled={loading}>
+      {loading ? 'Processing...' : `Pay ${amount} USDC`}
+    </button>
+  )
+}
+```
 
 ---
 
-## 🧪 Running Tests
+## Testing
 
 ### Unit Tests
 
-```bash
-npm run test:analyzer      # Test AnalyzerAgent
-npm run test:verifier      # Test VerifierAgent
-npm run test:settlement    # Test SettlementAgent
+```typescript
+import { SettlementAgent } from 'aether-agent-sdk'
+
+describe('SettlementAgent', () => {
+  let agent: SettlementAgent
+
+  beforeEach(async () => {
+    agent = new SettlementAgent()
+    await agent.init()
+  })
+
+  it('should execute payment', async () => {
+    const txHash = await agent.executeSolanaTransfer(
+      'test_wallet',
+      1.0
+    )
+
+    expect(txHash).toBeTruthy()
+    expect(typeof txHash).toBe('string')
+  })
+
+  it('should handle insufficient balance', async () => {
+    // Mock insufficient balance scenario
+    const txHash = await agent.executeSolanaTransfer(
+      'test_wallet',
+      999999.0
+    )
+
+    expect(txHash).toBeNull()
+  })
+})
 ```
 
 ### Integration Tests
 
-```bash
-npm run test:a2a-protocol  # Test A2A integration
-npm run test:x402-complete # Test x402 complete flow
-```
+```typescript
+describe('x402 Payment Flow', () => {
+  it('should complete full payment cycle', async () => {
+    const facilitator = new X402FacilitatorServer()
+    const agent = new SettlementAgent()
 
-### All Tests
+    await agent.init()
 
-```bash
-npm run test:all
-```
+    // Create payment
+    const requirements = {/* ... */}
+    const payload = {/* ... */}
+    const header = Buffer.from(JSON.stringify(payload)).toString('base64')
 
----
+    // Verify
+    const verification = await facilitator.verify(header, requirements)
+    expect(verification.isValid).toBe(true)
 
-## 🎬 Demo Showcases
-
-### Bounty 1: x402 Payment Standard
-
-```bash
-# Cross-chain NFT royalty (USDC on Base)
-npm run demo:nft-royalty 150
-
-# Native HBAR settlement
-npm run demo:hbar-x402 10
-```
-
-### Bounty 2: Hedera Agent Kit
-
-```bash
-# LLM-powered invoice validation
-npm run demo:invoice-llm
-
-# Fraud detection with memo verification
-npm run demo:supply-chain-fraud
-```
-
-### Complete Workflows
-
-```bash
-# Full 3-agent coordination
-npm run demo
-
-# Invoice automation
-npm run demo:invoice
-
-# Supply chain negotiation
-npm run demo:negotiation
+    // Settle
+    const settlement = await facilitator.settle(header, requirements)
+    expect(settlement.success).toBe(true)
+    expect(settlement.txHash).toBeTruthy()
+  })
+})
 ```
 
 ---
 
-## 📚 Next Steps
+## Next Steps
 
-1. **Read the README** - Start with the main overview
-2. **Choose a use case** - Pick a demo that matches your needs
-3. **Explore documentation** - See [Documentation Index](./INDEX.md)
-4. **Run demos** - Try the showcase demos
-5. **Review tests** - Review test implementations
+- Review [API Reference](./API_REFERENCE.md) for complete API docs
+- Read [x402 Guide](./X402_GUIDE.md) for protocol details
+- Check [Setup Guide](./SETUP_GUIDE.md) for configuration
 
 ---
 
-## 🔗 Additional Resources
-
-- [Complete Documentation Index](./INDEX.md) - All available docs
-- [API Reference](./API_REFERENCE.md) - Complete API docs
-- [Hackathon Submission](./HACKATHON_READY.md) - Submission details
-- [Bounty Guides](./BOUNTY_1_HEDERA_X402_STANDARD.md) - Bounty information
-
----
-
-## 💡 Tips
-
-### For Development
-
-- Start with unit tests to understand agent behavior
-- Use `check:credentials` to verify configuration
-- Check `check:wallets` to verify wallet status
-
-### For Production
-
-- Configure HITL for high-value transactions
-- Set up proper error handling
-- Monitor HCS topic messages
-- Use multiple network fallbacks
-
-### For Demos
-
-- Run demos in order: setup → test → showcase
-- Check transaction IDs on explorers
-- Monitor terminal output for errors
-- Verify wallet balances before running
-
----
-
-**Ready to build?** Start with [Installation](#-getting-started) and choose a use case that fits your needs.
+**Build powerful autonomous payment systems with Aether** 🚀
