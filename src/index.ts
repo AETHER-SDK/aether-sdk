@@ -1,8 +1,8 @@
 /**
- * Hedron Agent SDK
- * 
- * Main entry point for the Hedron Autonomous Agent Ecosystem SDK
- * 
+ * Aether Agent SDK
+ *
+ * Autonomous Agent Ecosystem SDK for Solana with x402 Payment Protocol
+ *
  * @packageDocumentation
  */
 
@@ -21,7 +21,7 @@ export * from './modes'
 // Facilitator
 export * from './facilitator'
 
-// Utils (optional exports)
+// Utils
 export * from './utils'
 
 /**
@@ -32,5 +32,5 @@ export const VERSION = '1.0.0'
 /**
  * SDK Name
  */
-export const SDK_NAME = 'hedron-agent-sdk'
+export const SDK_NAME = 'aether-agent-sdk'
 
