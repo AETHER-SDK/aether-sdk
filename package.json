@@ -1,0 +1,147 @@
+{
+  "name": "hedron-agent-sdk",
+  "version": "1.0.0",
+  "description": "Autonomous Agent Ecosystem SDK for Hedera Hashgraph - A2A Protocol, x402 Payment Standard, and Multi-Protocol Agent Communication",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/src/index.js",
+      "require": "./dist/src/index.js",
+      "types": "./dist/src/index.d.ts"
+    },
+    "./agents": {
+      "import": "./dist/src/agents/index.js",
+      "require": "./dist/src/agents/index.js",
+      "types": "./dist/src/agents/index.d.ts"
+    },
+    "./protocols": {
+      "import": "./dist/src/protocols/index.js",
+      "require": "./dist/src/protocols/index.js",
+      "types": "./dist/src/protocols/index.d.ts"
+    },
+    "./services": {
+      "import": "./dist/src/services/index.js",
+      "require": "./dist/src/services/index.js",
+      "types": "./dist/src/services/index.d.ts"
+    },
+    "./modes": {
+      "import": "./dist/src/modes/index.js",
+      "require": "./dist/src/modes/index.js",
+      "types": "./dist/src/modes/index.d.ts"
+    },
+    "./facilitator": {
+      "import": "./dist/src/facilitator/index.js",
+      "require": "./dist/src/facilitator/index.js",
+      "types": "./dist/src/facilitator/index.d.ts"
+    }
+  },
+  "files": [
+    "dist/src",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "hedera",
+    "hashgraph",
+    "agent",
+    "autonomous-agents",
+    "a2a-protocol",
+    "x402",
+    "payment",
+    "blockchain",
+    "hcs",
+    "cross-chain",
+    "ai",
+    "llm",
+    "agent-communication",
+    "supply-chain",
+    "invoice-automation"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "setup:agents": "ts-node setup/register-agents.ts",
+    "setup:hcs11": "ts-node scripts/hcs11-setup/setup-hcs11-memo.ts",
+    "setup:hcs11-fixed": "ts-node scripts/hcs11-setup/setup-hcs11-memo-fixed.ts",
+    "create:hcs11-profile": "ts-node scripts/hcs11-setup/create-hcs11-profile.ts",
+    "inscribe:hcs11-data": "ts-node scripts/hcs11-setup/inscribe-hcs11-profile-data.ts",
+    "create:complete-hcs11": "ts-node scripts/hcs11-setup/create-complete-hcs11-profile.ts",
+    "create:simple-hcs11": "ts-node scripts/hcs11-setup/create-simple-hcs11-profile.ts",
+    "check:credentials": "ts-node scripts/maintenance/check-credentials-status.ts",
+    "demo": "ts-node demo/orchestrator.ts",
+    "demo:invoice": "ts-node demo/invoice-automation-demo.ts",
+    "demo:invoice-llm": "ts-node demo/intelligent-invoice-demo.ts",
+    "demo:negotiation": "ts-node demo/supply-chain-negotiation-demo.ts",
+    "demo:nft-royalty": "ts-node demo/nft-royalty-x402-demo.ts",
+    "demo:hbar-x402": "ts-node demo/hbar-direct-x402-demo.ts",
+    "demo:supply-chain-fraud": "ts-node demo/supply-chain-fraud-detection-demo.ts",
+    "demo:rwa-invoice": "ts-node demo/tokenized-rwa-invoice-demo.ts",
+    "check:wallets": "ts-node scripts/maintenance/check-wallet-status.ts",
+    "test:unit": "ts-node tests/unit/test-analyzer.ts && ts-node tests/unit/test-verifier.ts && ts-node tests/unit/test-settlement.ts",
+    "test:integration": "ts-node tests/integration/test-improved-x402.ts && ts-node tests/integration/test-merchant-agent.ts && ts-node tests/integration/test-payment-server.ts && ts-node tests/integration/test-enhanced-x402utils.ts && ts-node tests/integration/test-complete-x402-system.ts",
+    "test:e2e": "ts-node tests/e2e/test-complete-coordination.ts && ts-node tests/e2e/test-working-coordination.ts && ts-node tests/e2e/test-payment-flow.ts",
+    "test:debug": "ts-node tests/debug/test-direct-payment.ts && ts-node tests/debug/test-direct-usdc-transfer.ts && ts-node tests/debug/test-funded-payment.ts && ts-node tests/debug/test-payment-debug.ts",
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e",
+    "test:analyzer": "ts-node tests/unit/test-analyzer.ts",
+    "test:verifier": "ts-node tests/unit/test-verifier.ts",
+    "test:settlement": "ts-node tests/unit/test-settlement.ts",
+    "test:merchant": "ts-node tests/integration/test-merchant-agent.ts",
+    "test:server": "ts-node tests/integration/test-payment-server.ts",
+    "test:utils": "ts-node tests/integration/test-enhanced-x402utils.ts",
+    "test:complete": "ts-node tests/integration/test-complete-x402-system.ts",
+    "test:coordination": "ts-node tests/e2e/test-complete-coordination.ts",
+    "test:working": "ts-node tests/e2e/test-working-coordination.ts",
+    "test:improved": "ts-node tests/integration/test-improved-x402.ts",
+    "test:usdc": "ts-node tests/debug/test-direct-usdc-transfer.ts",
+    "test:funded": "ts-node tests/debug/test-funded-payment.ts",
+    "test:hedera": "ts-node tests/integration/test-hedera-x402.ts",
+    "test:a2a-protocol": "ts-node tests/integration/test-a2a-protocol.ts",
+    "test:a2a-unit": "ts-node tests/unit/test-a2a-unit.ts",
+    "test:ap2-payments": "ts-node tests/integration/test-ap2-payments.ts",
+    "test:hitl": "ts-node tests/e2e/test-human-in-the-loop.ts",
+    "test:x402-complete": "ts-node tests/integration/test-complete-x402-system.ts",
+    "test:x402-server": "ts-node tests/integration/test-payment-server.ts",
+    "test:e2e-payment": "ts-node tests/e2e/test-payment-flow.ts",
+    "deploy:supply-chain": "ts-node scripts/deploy-supply-chain.ts",
+    "deploy:real": "ts-node scripts/deploy-real.ts",
+    "deploy:simple": "ts-node scripts/deploy-simple.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hebx/hedera-a2a-agents.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Hebx/hedera-a2a-agents/issues"
+  },
+  "homepage": "https://github.com/Hebx/hedera-a2a-agents#readme",
+  "dependencies": {
+    "@hashgraph/sdk": "^2.75.0",
+    "@hashgraphonline/standards-agent-kit": "^0.2.164",
+    "@langchain/core": "^1.0.1",
+    "@langchain/ollama": "^1.0.0",
+    "@langchain/openai": "^1.0.0",
+    "a2a-x402": "^0.0.5",
+    "axios": "^1.12.2",
+    "chalk": "^5.6.2",
+    "dotenv": "^16.6.1",
+    "ethers": "^6.15.0",
+    "hedera-agent-kit": "^3.4.0",
+    "langchain": "^1.0.1"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-verify": "^3.0.4",
+    "@openzeppelin/contracts": "^5.4.0",
+    "@types/axios": "^0.9.36",
+    "@types/express": "^5.0.4",
+    "@types/node": "^24.9.1",
+    "eslint": "^9.38.0",
+    "hardhat": "^3.0.9",
+    "prettier": "^3.6.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
