@@ -1,11 +1,14 @@
 # Aether
 
-**Autonomous Agent Ecosystem SDK for Solana**
+  **Autonomous Agent Ecosystem SDK for Solana**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
-[![Solana](https://img.shields.io/badge/Solana-Compatible-green.svg)](https://solana.com)
-[![x402](https://img.shields.io/badge/x402-Enabled-purple.svg)](https://solana.com/x402/what-is-x402)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
+  [![Solana](https://img.shields.io/badge/Solana-Compatible-green.svg)](https://solana.com)
+  [![Token](https://img.shields.io/badge/Token-ATHR-purple.svg)](https://pump.fun/coin/5abiPeWqRLYb21DWNGYRFwrABML24dYuGn39ZpPYpump)
+
+  > **🪙 $ATHR Token**: [Trade on Pump.fun →](https://pump.fun/coin/5abiPeWqRLYb21DWNGYRFwrABML24dYuGn39ZpPYpump)
+
 
 Aether is a production-ready SDK for building autonomous agent-to-agent systems on Solana. It integrates the x402 Payment Protocol to enable intelligent agent communication and micropayment settlement.
 
