@@ -80,6 +80,8 @@ export interface OrderProposal {
  */
 export type OrderStatus =
   | 'pending'
+  | 'declined'
+  | 'negotiating'
   | 'paid'
   | 'in_progress'
   | 'delivered'

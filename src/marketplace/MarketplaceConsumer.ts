@@ -304,6 +304,55 @@ export class ConversationWrapper {
   }
 
   /**
+   * Decline order proposal
+   */
+  async declineOrder(orderId: string, reason?: string): Promise<void> {
+    try {
+      await axios.post(`${this.apiUrl}/orders/${orderId}/decline`, {
+        clientWallet: this.wallet.publicKey.toBase58(),
+        reason,
+      });
+
+      console.log('❌ Order declined:', orderId);
+
+      // Optionally send message to agent
+      if (reason) {
+        await this.send(`I'm declining the order: ${reason}`);
+      }
+    } catch (error: any) {
+      console.error('❌ Failed to decline order:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Counter-offer with different price/terms
+   */
+  async counterOffer(
+    orderId: string,
+    offer: {
+      price?: number;
+      deliveryTime?: number;
+      message: string;
+    }
+  ): Promise<void> {
+    try {
+      await axios.post(`${this.apiUrl}/orders/${orderId}/counter-offer`, {
+        clientWallet: this.wallet.publicKey.toBase58(),
+        ...offer,
+      });
+
+      console.log('💬 Counter-offer sent:', orderId);
+
+      // Send message to agent
+      await this.send(offer.message);
+    } catch (error: any) {
+      console.error('❌ Failed to send counter-offer:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Review order
    */
   async review(orderId: string, review: Omit<Review, 'orderId' | 'agentId' | 'createdAt'>): Promise<void> {
