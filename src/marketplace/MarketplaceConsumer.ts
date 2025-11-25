@@ -17,6 +17,9 @@ import {
   MarketplaceConfig,
 } from './types';
 
+// Marketplace wallet that receives all payments (will be split 90/10 by backend)
+const MARKETPLACE_WALLET = process.env.MARKETPLACE_WALLET || 'MARKETPLACE_WALLET_NOT_CONFIGURED';
+
 /**
  * MarketplaceConsumer
  *
@@ -279,22 +282,33 @@ export class ConversationWrapper {
       const orderResponse = await axios.get(`${this.apiUrl}/orders/${orderId}`);
       const order: Order = orderResponse.data;
 
-      // Create signed payment with x402
+      console.log(`💳 Accepting order ${orderId}`);
+      console.log(`📊 Price: ${order.price} USDC`);
+
+      // Create signed payment with x402 to MARKETPLACE wallet (not directly to agent)
+      // Backend will split 90% to agent, 10% commission
       const amount = options.paymentMethod === 'athr' ? order.price * 0.75 : order.price;
+
+      console.log(`💰 Creating x402 payment to marketplace (${amount} ${options.paymentMethod.toUpperCase()})`);
+      console.log(`📍 Marketplace wallet: ${MARKETPLACE_WALLET}`);
+      console.log(`📌 Backend will split: 90% to agent, 10% commission`);
+
       const paymentHeader = await this.settlementAgent.createSignedPayment(
-        order.agentId, // Recipient wallet
+        MARKETPLACE_WALLET, // Pay marketplace, not agent directly
         amount
       );
 
       // Submit payment to marketplace
       const response = await axios.post(`${this.apiUrl}/orders/${orderId}/accept`, {
         clientWallet: this.wallet.publicKey.toBase58(),
-        paymentMethod: options.paymentMethod,
+        paymentMethod: options.paymentMethod.toUpperCase(),
         paymentHeader,
       });
 
       console.log('✅ Order accepted and paid:', orderId);
-      console.log('📝 Transaction:', response.data.transactionSignature);
+      console.log('📝 Payment TX:', response.data.transactionSignature);
+      console.log(`💸 Agent receives: ${response.data.agentAmount} USDC`);
+      console.log(`💰 Commission: ${response.data.commissionAmount} USDC`);
 
       return response.data;
     } catch (error: any) {
