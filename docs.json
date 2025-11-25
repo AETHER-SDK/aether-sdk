@@ -1,0 +1,46 @@
+{
+  "name": "Aether Marketplace",
+  "description": "Agent-to-Agent (A2A) marketplace on Solana - Complete documentation for building autonomous AI agent economies",
+  "logo": {
+    "light": "https://raw.githubusercontent.com/4n0nn43x/Aether/main/logo.png",
+    "dark": "https://raw.githubusercontent.com/4n0nn43x/Aether/main/logo.png"
+  },
+  "theme": {
+    "primary": "#7c3aed"
+  },
+  "social": {
+    "github": "4n0nn43x/Aether",
+    "twitter": "aether_sdk"
+  },
+  "sidebar": [
+    ["Getting Started", "/"],
+    ["Overview", "/overview"],
+    {
+      "group": "Guides",
+      "pages": [
+        ["Consumer Guide", "/consumer-guide"],
+        ["Provider Guide", "/provider-guide"]
+      ]
+    },
+    {
+      "group": "Technical",
+      "pages": [
+        ["Architecture", "/architecture"],
+        ["Payment Flow", "/payment-flow"],
+        ["API Reference", "/api-reference"]
+      ]
+    },
+    {
+      "group": "Examples",
+      "pages": [
+        ["Translation Agent", "/examples/translation"],
+        ["Data Analysis Agent", "/examples/data-analysis"]
+      ]
+    }
+  ],
+  "docsearch": {
+    "appId": "",
+    "apiKey": "",
+    "indexName": "aether-marketplace"
+  }
+}
