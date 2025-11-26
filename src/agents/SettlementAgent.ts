@@ -11,28 +11,20 @@ export class SettlementAgent {
   private connection: Connection
   private agentWallet?: Keypair
   private facilitator: X402FacilitatorServer
-  private merchantWallet: string
+  private merchantWallet?: string
 
-  constructor() {
+  constructor(merchantWallet?: string) {
     const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com'
     const agentPrivateKey = process.env.AGENT_PRIVATE_KEY
-    const merchantWallet = process.env.MERCHANT_WALLET_ADDRESS
 
-    if (!merchantWallet) {
-      console.error(chalk.red('\n❌ Configuration Error: Missing MERCHANT_WALLET_ADDRESS'))
-      console.log(chalk.yellow('\n📋 Setup Instructions:'))
-      console.log(chalk.white('1. Copy the example configuration:'))
-      console.log(chalk.gray('   cp .env.example .env\n'))
-      console.log(chalk.white('2. Edit .env and add:'))
-      console.log(chalk.gray('   AGENT_PRIVATE_KEY=your_base58_key'))
-      console.log(chalk.gray('   MERCHANT_WALLET_ADDRESS=recipient_address\n'))
-      console.log(chalk.white('3. Generate a Solana wallet (if needed):'))
-      console.log(chalk.gray('   solana-keygen new --outfile wallet.json\n'))
-      throw new Error('Missing required environment variable: MERCHANT_WALLET_ADDRESS')
+    // Allow merchant wallet from parameter or env variable
+    if (merchantWallet) {
+      this.merchantWallet = merchantWallet
+    } else if (process.env.MERCHANT_WALLET_ADDRESS) {
+      this.merchantWallet = process.env.MERCHANT_WALLET_ADDRESS
     }
 
     this.connection = new Connection(rpcUrl, 'confirmed')
-    this.merchantWallet = merchantWallet
     this.facilitator = new X402FacilitatorServer()
 
     if (agentPrivateKey) {
@@ -63,7 +55,18 @@ export class SettlementAgent {
     }
   }
 
+  /**
+   * Set merchant wallet dynamically (for marketplace consumer)
+   */
+  setMerchantWallet(merchantWallet: string) {
+    this.merchantWallet = merchantWallet
+  }
+
   private createPaymentRequirements() {
+    if (!this.merchantWallet) {
+      throw new Error('Merchant wallet not set. Call setMerchantWallet() first.')
+    }
+
     const paymentAmount = parseFloat(process.env.DEFAULT_PAYMENT_AMOUNT_USDC || '1.0')
     const amountInMicroUsdc = Math.floor(paymentAmount * 1_000_000)
 

@@ -112,15 +112,32 @@ export class MarketplaceConsumer {
     options: { message: string; attachments?: any[] }
   ): Promise<ConversationWrapper> {
     try {
+      // Get agent details to set merchant wallet
+      const agentResponse = await axios.get(`${this.apiUrl}/agents/${agentId}`);
+      const agent = agentResponse.data;
+
+      // Set merchant wallet dynamically
+      this.settlementAgent.setMerchantWallet(agent.ownerWallet);
+
       const response = await axios.post(`${this.apiUrl}/conversations`, {
         agentId,
         clientWallet: this.wallet.publicKey.toBase58(),
-        clientType: 'agent', // Could be 'person' for web UI
-        initialMessage: options.message,
+        message: options.message,
         attachments: options.attachments,
       });
 
-      const conversation: Conversation = response.data.conversation;
+      // API returns { conversationId, agentEndpoint }
+      const conversationId = response.data.conversationId;
+
+      // Build conversation object
+      const conversation: Conversation = {
+        id: conversationId,
+        agentId: agentId,
+        clientWallet: this.wallet.publicKey.toBase58(),
+        clientType: 'agent',
+        lastMessageAt: new Date(),
+        status: 'active'
+      };
 
       console.log('💬 Conversation started:', conversation.id);
 

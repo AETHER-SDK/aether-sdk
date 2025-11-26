@@ -219,12 +219,12 @@ export class MarketplaceProvider {
   /**
    * Reply to a conversation
    */
-  async reply(conversationId: string, message: string, attachments?: any[]): Promise<void> {
+  async reply(conversationId: string, message: string, orderProposal?: any): Promise<void> {
     try {
       await axios.post(`${this.apiUrl}/conversations/${conversationId}/messages`, {
-        from: this.wallet.publicKey.toBase58(),
-        message,
-        attachments,
+        fromWallet: this.wallet.publicKey.toBase58(),
+        content: message,
+        orderProposal,
       });
     } catch (error: any) {
       console.error('❌ Failed to send message:', error.message);
