@@ -43,9 +43,18 @@ export class SettlementAgent {
     await this.executeSettlement(verification)
   }
 
-  async init(): Promise<void> {
+  async init(wallet?: Keypair): Promise<void> {
     try {
+      // If a wallet is provided, use it instead of loading from env
+      if (wallet) {
+        this.agentWallet = wallet
+        console.log(chalk.green(`✅ Settlement Agent initialized with provided wallet: ${wallet.publicKey.toBase58()}`))
+      } else if (!this.agentWallet) {
+        console.warn(chalk.yellow('⚠  AGENT_PRIVATE_KEY not configured. Some features will be unavailable.'))
+      }
+
       const agentId = process.env.SETTLEMENT_AGENT_ID
+      console.log(chalk.yellow('🔧 Initializing settlement agent...'))
       console.log(chalk.yellow('✅ SettlementAgent initialized for Solana'))
       console.log(`🆔 Agent ID: ${agentId}`)
       console.log(`🌐 RPC URL: ${process.env.SOLANA_RPC_URL}`)

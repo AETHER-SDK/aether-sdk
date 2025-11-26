@@ -17,9 +17,6 @@ import {
   MarketplaceConfig,
 } from './types';
 
-// Marketplace wallet that receives all payments (will be split 90/10 by backend)
-const MARKETPLACE_WALLET = process.env.MARKETPLACE_WALLET || 'MARKETPLACE_WALLET_NOT_CONFIGURED';
-
 /**
  * MarketplaceConsumer
  *
@@ -61,6 +58,7 @@ export class MarketplaceConsumer {
   private apiUrl: string;
   private wallet: any;
   private settlementAgent: SettlementAgent;
+  private marketplaceWallet?: string;
 
   constructor(config: Omit<MarketplaceConfig, 'role' | 'profile' | 'services'>) {
     this.apiUrl = config.apiUrl;
@@ -69,10 +67,22 @@ export class MarketplaceConsumer {
   }
 
   /**
-   * Initialize settlement agent
+   * Initialize settlement agent and fetch marketplace info
    */
   async init(): Promise<void> {
-    await this.settlementAgent.init();
+    // Initialize settlement agent with the consumer's wallet
+    await this.settlementAgent.init(this.wallet);
+
+    // Fetch marketplace wallet from backend
+    try {
+      const response = await axios.get(`${this.apiUrl}/marketplace/info`);
+      this.marketplaceWallet = response.data.marketplaceWallet;
+      console.log(`📍 Marketplace wallet fetched: ${this.marketplaceWallet}`);
+      console.log(`💰 Commission rate: ${(response.data.commissionRate * 100).toFixed(0)}%`);
+    } catch (error: any) {
+      console.error('⚠️  Failed to fetch marketplace info:', error.message);
+      throw new Error('Could not initialize consumer: marketplace info unavailable');
+    }
   }
 
   /**
@@ -141,11 +151,17 @@ export class MarketplaceConsumer {
 
       console.log('💬 Conversation started:', conversation.id);
 
+      // Ensure marketplace wallet is available
+      if (!this.marketplaceWallet) {
+        throw new Error('Marketplace wallet not initialized. Did you call init()?');
+      }
+
       return new ConversationWrapper(
         conversation,
         this.apiUrl,
         this.wallet,
-        this.settlementAgent
+        this.settlementAgent,
+        this.marketplaceWallet
       );
     } catch (error: any) {
       console.error('❌ Failed to start conversation:', error.message);
@@ -161,11 +177,17 @@ export class MarketplaceConsumer {
       const response = await axios.get(`${this.apiUrl}/conversations/${conversationId}`);
       const conversation: Conversation = response.data;
 
+      // Ensure marketplace wallet is available
+      if (!this.marketplaceWallet) {
+        throw new Error('Marketplace wallet not initialized. Did you call init()?');
+      }
+
       return new ConversationWrapper(
         conversation,
         this.apiUrl,
         this.wallet,
-        this.settlementAgent
+        this.settlementAgent,
+        this.marketplaceWallet
       );
     } catch (error: any) {
       console.error('❌ Failed to get conversation:', error.message);
@@ -231,6 +253,7 @@ export class ConversationWrapper {
   private apiUrl: string;
   private wallet: any;
   private settlementAgent: SettlementAgent;
+  private marketplaceWallet: string;
   private messageHandlers: ((msg: ConversationMessage) => void)[] = [];
   private deliveryHandlers: ((delivery: Delivery) => void)[] = [];
   private pollingInterval?: NodeJS.Timeout;
@@ -239,12 +262,14 @@ export class ConversationWrapper {
     conversation: Conversation,
     apiUrl: string,
     wallet: any,
-    settlementAgent: SettlementAgent
+    settlementAgent: SettlementAgent,
+    marketplaceWallet: string
   ) {
     this.conversation = conversation;
     this.apiUrl = apiUrl;
     this.wallet = wallet;
     this.settlementAgent = settlementAgent;
+    this.marketplaceWallet = marketplaceWallet;
   }
 
   /**
@@ -260,8 +285,8 @@ export class ConversationWrapper {
   async send(message: string, attachments?: any[]): Promise<void> {
     try {
       await axios.post(`${this.apiUrl}/conversations/${this.conversation.id}/messages`, {
-        from: this.wallet.publicKey.toBase58(),
-        message,
+        fromWallet: this.wallet.publicKey.toBase58(),
+        content: message,
         attachments,
       });
     } catch (error: any) {
@@ -302,16 +327,21 @@ export class ConversationWrapper {
       console.log(`💳 Accepting order ${orderId}`);
       console.log(`📊 Price: ${order.price} USDC`);
 
+      // Ensure marketplace wallet is available
+      if (!this.marketplaceWallet) {
+        throw new Error('Marketplace wallet not initialized. Did you call init()?');
+      }
+
       // Create signed payment with x402 to MARKETPLACE wallet (not directly to agent)
       // Backend will split 90% to agent, 10% commission
       const amount = options.paymentMethod === 'athr' ? order.price * 0.75 : order.price;
 
       console.log(`💰 Creating x402 payment to marketplace (${amount} ${options.paymentMethod.toUpperCase()})`);
-      console.log(`📍 Marketplace wallet: ${MARKETPLACE_WALLET}`);
+      console.log(`📍 Marketplace wallet: ${this.marketplaceWallet}`);
       console.log(`📌 Backend will split: 90% to agent, 10% commission`);
 
       const paymentHeader = await this.settlementAgent.createSignedPayment(
-        MARKETPLACE_WALLET, // Pay marketplace, not agent directly
+        this.marketplaceWallet, // Pay marketplace, not agent directly
         amount
       );
 
