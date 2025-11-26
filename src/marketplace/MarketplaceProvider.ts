@@ -66,6 +66,7 @@ export class MarketplaceProvider {
   private messageHandler?: MessageHandler;
   private orderPaidHandler?: OrderPaidHandler;
   private pollingInterval?: NodeJS.Timeout;
+  private agentId?: string;
 
   constructor(config: Omit<MarketplaceConfig, 'role'> & { profile: AgentProfile; services: AgentService[] }) {
     this.apiUrl = config.apiUrl;
@@ -92,6 +93,9 @@ export class MarketplaceProvider {
 
       console.log('✅ Agent registered on marketplace:', response.data.agentId);
 
+      // Store agent ID
+      this.agentId = response.data.agentId;
+
       // Step 2: Create services if any
       if (this.services && this.services.length > 0) {
         console.log(`📋 Creating ${this.services.length} services...`);
@@ -117,8 +121,48 @@ export class MarketplaceProvider {
 
       return response.data;
     } catch (error: any) {
-      console.error('❌ Failed to register agent:', error.message);
+      // Check if agent already exists first (before logging error)
+      const errorMsg = error.response?.data?.message || error.message;
+
+      if (errorMsg.includes('already have an agent') || errorMsg.includes('already registered')) {
+        // Agent already exists - try to get its ID
+        console.log('ℹ️  Agent already registered, fetching existing agent ID...');
+        try {
+          const existingAgent = await this.getExistingAgentId();
+          if (existingAgent) {
+            this.agentId = existingAgent.agentId;
+            console.log('✅ Using existing agent ID:', this.agentId);
+            return { agentId: this.agentId };
+          }
+        } catch (fetchError) {
+          console.error('❌ Failed to fetch existing agent ID');
+        }
+      } else {
+        // It's a real error - log it
+        console.error('❌ Failed to register agent:', error.message);
+        if (error.response?.data?.message) {
+          console.error('   Validation errors:', error.response.data.message);
+        }
+      }
+
       throw error;
+    }
+  }
+
+  /**
+   * Get existing agent ID by wallet and name
+   */
+  private async getExistingAgentId(): Promise<{ agentId: string } | null> {
+    try {
+      const response = await axios.get(`${this.apiUrl}/agents/by-wallet-and-name`, {
+        params: {
+          wallet: this.wallet.publicKey.toBase58(),
+          name: this.profile.name,
+        },
+      });
+      return { agentId: response.data.id };
+    } catch (error) {
+      return null;
     }
   }
 
@@ -282,8 +326,12 @@ export class MarketplaceProvider {
     if (!this.messageHandler) return;
 
     try {
+      const params = this.agentId
+        ? { agentId: this.agentId }
+        : { wallet: this.wallet.publicKey.toBase58() };
+
       const response = await axios.get(`${this.apiUrl}/agents/messages/new`, {
-        params: { wallet: this.wallet.publicKey.toBase58() },
+        params,
       });
 
       const newMessages = response.data.messages || [];
@@ -306,8 +354,12 @@ export class MarketplaceProvider {
     if (!this.orderPaidHandler) return;
 
     try {
+      const params = this.agentId
+        ? { agentId: this.agentId }
+        : { wallet: this.wallet.publicKey.toBase58() };
+
       const response = await axios.get(`${this.apiUrl}/agents/orders/paid`, {
-        params: { wallet: this.wallet.publicKey.toBase58() },
+        params,
       });
 
       const paidOrders = response.data.orders || [];
