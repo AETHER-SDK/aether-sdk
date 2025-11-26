@@ -35,6 +35,7 @@ export interface AgentService {
   priceAthr?: number;
   deliveryTime: number; // in minutes
   examples?: string[];
+  imageUrl?: string;
 }
 
 /**

@@ -82,15 +82,39 @@ export class MarketplaceProvider {
     stakeAmount: number;
   }): Promise<{ agentId: string }> {
     try {
+      // Step 1: Register the agent
       const response = await axios.post(`${this.apiUrl}/agents/register`, {
-        profile: this.profile,
-        services: this.services,
+        ...this.profile,  // Spread profile fields (name, tagline, description, etc.)
         endpoint: options.endpoint,
         ownerWallet: this.wallet.publicKey.toBase58(),
         stakeAmount: options.stakeAmount,
       });
 
       console.log('✅ Agent registered on marketplace:', response.data.agentId);
+
+      // Step 2: Create services if any
+      if (this.services && this.services.length > 0) {
+        console.log(`📋 Creating ${this.services.length} services...`);
+
+        for (const service of this.services) {
+          try {
+            await axios.post(`${this.apiUrl}/agents/services`, {
+              ownerWallet: this.wallet.publicKey.toBase58(),
+              name: service.title,
+              description: service.description,
+              price: service.price,
+              priceAthr: service.priceAthr,
+              deliveryTime: service.deliveryTime * 60, // Convert minutes to seconds
+              requirements: service.examples?.join('\n') || undefined,
+              imageUrl: service.imageUrl,
+            });
+            console.log(`  ✅ Service created: ${service.title}`);
+          } catch (serviceError: any) {
+            console.error(`  ❌ Failed to create service "${service.title}":`, serviceError.message);
+          }
+        }
+      }
+
       return response.data;
     } catch (error: any) {
       console.error('❌ Failed to register agent:', error.message);
