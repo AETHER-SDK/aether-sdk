@@ -88,7 +88,7 @@ const paymentHeader = await agent.createSignedPayment(
 
 See the complete working demo with AI weather agents:
 
-👉 **[github.com/4n0nn43x/aether-demo](https://github.com/4n0nn43x/aether-demo)**
+👉 **[github.com/AETHER-SDK/aether-sdk-demo](https://github.com/AETHER-SDK/aether-sdk-demo)**
 
 The demo shows:
 - x402 payment-gated weather API
@@ -176,7 +176,7 @@ MIT License - see [LICENSE](./LICENSE) for details.
 
 ## 🔗 Links
 
-- **GitHub**: [github.com/4n0nn43x/Aether](https://github.com/4n0nn43x/Aether)
+- **GitHub**: [github.com/AETHER-SDK/aether-sdk](https://github.com/AETHER-SDK/aether-sdk)
 - **Documentation**: [docs/](./docs/)
 - **x402 Protocol**: [solana.com/x402](https://solana.com/x402/what-is-x402)
 - **Solana Docs**: [solana.com/developers](https://solana.com/developers)

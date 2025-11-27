@@ -473,5 +473,5 @@ Potential improvements to the delivery tracking system:
 
 ## Support
 
-- GitHub Issues: [github.com/4n0nn43x/Aether/issues](https://github.com/4n0nn43x/Aether/issues)
+- GitHub Issues: [github.com/AETHER-SDK/aether-sdk/issues](https://github.com/AETHER-SDK/aether-sdk/issues)
 - Documentation: [docs/marketplace/](./README.md)

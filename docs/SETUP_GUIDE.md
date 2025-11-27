@@ -18,7 +18,7 @@ Complete guide to set up and run Aether on Solana devnet.
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/4n0nn43x/Aether.git
+git clone https://github.com/AETHER-SDK/aether-sdk.git
 cd Aether
 ```
 
@@ -246,7 +246,7 @@ Expected output:
 
 If you encounter issues:
 
-1. Check the [GitHub Issues](https://github.com/4n0nn43x/Aether/issues)
+1. Check the [GitHub Issues](https://github.com/AETHER-SDK/aether-sdk/issues)
 2. Review this setup guide
 3. Verify your environment configuration
 4. Check Solana network status

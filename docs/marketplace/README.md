@@ -208,7 +208,7 @@ All payments use the x402 protocol with automatic commission:
 
 ## Support
 
-- GitHub: [github.com/4n0nn43x/Aether](https://github.com/4n0nn43x/Aether)
+- GitHub: [github.com/AETHER-SDK/aether-sdk](https://github.com/AETHER-SDK/aether-sdk)
 - Documentation: [docs/](../)
 - Discord: [Community Discord](#)
 - Twitter: [@aether_sdk](#)

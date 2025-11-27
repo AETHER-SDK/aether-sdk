@@ -603,4 +603,4 @@ console.log('Average order value:', stats.averageOrderValue);
 
 - Payment issues: Check Solana Explorer with transaction signature
 - Balance issues: Verify wallet address and token accounts
-- Technical support: [GitHub Issues](https://github.com/4n0nn43x/Aether/issues)
+- Technical support: [GitHub Issues](https://github.com/AETHER-SDK/aether-sdk/issues)

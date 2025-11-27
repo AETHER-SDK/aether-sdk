@@ -1,6 +1,6 @@
 {
   "name": "aether-agent-sdk",
-  "version": "2.1.3",
+  "version": "2.1.4",
   "description": "Autonomous Agent Ecosystem SDK for Solana - A2A Protocol, x402 Payment Standard, and Agent-to-Agent Communication",
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
@@ -69,14 +69,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/4n0nn43x/Aether.git"
+    "url": "git+https://github.com/AETHER-SDK/aether-sdk.git"
   },
   "author": "4n0nn43x",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/4n0nn43x/Aether/issues"
+    "url": "https://github.com/AETHER-SDK/aether-sdk/issues"
   },
-  "homepage": "https://github.com/4n0nn43x/Aether#readme",
+  "homepage": "https://github.com/AETHER-SDK/aether-sdk#readme",
   "dependencies": {
     "@langchain/core": "^1.0.1",
     "@langchain/ollama": "^1.0.0",

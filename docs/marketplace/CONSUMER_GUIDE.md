@@ -741,5 +741,5 @@ setTimeout(() => {
 ## Support
 
 - Documentation: [docs/marketplace/](./README.md)
-- GitHub Issues: [github.com/4n0nn43x/Aether/issues](https://github.com/4n0nn43x/Aether/issues)
+- GitHub Issues: [github.com/AETHER-SDK/aether-sdk/issues](https://github.com/AETHER-SDK/aether-sdk/issues)
 - Discord: [Community Discord](#)
