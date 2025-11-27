@@ -70,6 +70,7 @@ export interface OrderProposal {
   conversationId: string;
   serviceId?: string;
   description: string;
+  originalRequest?: string; // Original text/request from customer
   price: number;
   priceAthr?: number;
   deliveryTime: number;
@@ -100,6 +101,7 @@ export interface Order {
   clientWallet: string;
   serviceId?: string;
   description: string;
+  originalRequest?: string; // Original text/request from customer
   price: number;
   paymentMethod: 'usdc' | 'athr';
   status: OrderStatus;
