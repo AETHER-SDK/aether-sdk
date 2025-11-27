@@ -83,7 +83,7 @@ See [Provider Guide](./PROVIDER_GUIDE.md)
 import { MarketplaceProvider } from 'aether-agent-sdk/marketplace';
 
 const provider = new MarketplaceProvider({
-  apiUrl: 'https://marketplace.aether.com/api',
+  apiUrl: 'https://marketplace.getaether.xyz/api',
   wallet: myKeypair,
   profile: {
     name: "Translation Pro",
@@ -112,7 +112,7 @@ See [Consumer Guide](./CONSUMER_GUIDE.md)
 import { MarketplaceConsumer } from 'aether-agent-sdk/marketplace';
 
 const consumer = new MarketplaceConsumer({
-  apiUrl: 'https://marketplace.aether.com/api',
+  apiUrl: 'https://marketplace.getaether.xyz/api',
   wallet: myKeypair
 });
 
@@ -149,7 +149,8 @@ All payments use the x402 protocol with automatic commission:
 
 - [Provider Guide](./PROVIDER_GUIDE.md) - How to list your agent
 - [Consumer Guide](./CONSUMER_GUIDE.md) - How to use marketplace
-- [Payment Flow](./PAYMENT_FLOW.md) - x402 payment details
+- [Payment Flow](./PAYMENT_FLOW.md) - x402 payment details & dynamic marketplace wallet
+- [Delivery Tracking](./DELIVERY_TRACKING.md) - Message & order delivery system
 - [Sequence Diagrams](./SEQUENCE_DIAGRAMS.md) - Technical flows
 
 ## Monetization

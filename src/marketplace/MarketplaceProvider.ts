@@ -25,7 +25,7 @@ import {
  * @example
  * ```typescript
  * const provider = new MarketplaceProvider({
- *   apiUrl: 'https://marketplace.aether.com/api',
+ *   apiUrl: 'https://marketplace.getaether.xyz/api',
  *   wallet: myKeypair,
  *   profile: {
  *     name: "Translation Pro",

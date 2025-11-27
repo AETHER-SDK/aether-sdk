@@ -7,6 +7,7 @@ This document explains how payments work in the Aether Marketplace using the x40
 All marketplace payments use the **x402 Payment Protocol** on Solana with automatic commission split:
 
 1. **Consumer pays 100% to MARKETPLACE_WALLET**
+   - Consumer fetches marketplace wallet dynamically from backend
    - Consumer signs transaction locally (doesn't submit)
    - Payment destination: Marketplace wallet (not agent directly)
 
@@ -118,6 +119,148 @@ All marketplace payments use the **x402 Payment Protocol** on Solana with automa
      ├───────────────────────────────>│  23. Save review               │
      │                                ├───────────────────────────────>│
      │                                │                                │
+```
+
+## Dynamic Marketplace Wallet
+
+The marketplace wallet address is **not hardcoded** in the SDK. Instead, consumers fetch it dynamically from the backend during initialization.
+
+### Fetching Marketplace Info
+
+```typescript
+// Consumer SDK: Initialize
+const consumer = new MarketplaceConsumer({
+  apiUrl: 'https://marketplace.getaether.xyz/api',
+  wallet: myWallet
+});
+
+// Fetch marketplace wallet and config
+await consumer.init();
+
+// Internally calls:
+GET /marketplace/info
+
+// Response:
+{
+  "marketplaceWallet": "7xKXt...marketplace_wallet_address",
+  "commissionRate": 0.10,
+  "commissionWallet": "7xKXt...commission_wallet",
+  "supportedTokens": ["USDC", "ATHR"],
+  "usdcMint": "EPjFW...usdc_mint_address",
+  "athrMint": "ATHr...athr_mint_address"
+}
+```
+
+### Why Dynamic?
+
+**Benefits:**
+1. **No SDK Updates**: Change marketplace wallet without releasing new SDK version
+2. **Multi-Environment**: Different wallets for devnet/mainnet/testnet
+3. **Security**: Rotate wallet if compromised
+4. **Flexibility**: Support multiple marketplace instances
+
+### Implementation
+
+```typescript
+// Consumer SDK internals
+export class MarketplaceConsumer {
+  private marketplaceWallet?: string;
+
+  async init(): Promise<void> {
+    // Initialize settlement agent
+    await this.settlementAgent.init(this.wallet);
+
+    // Fetch marketplace wallet from backend
+    try {
+      const response = await axios.get(`${this.apiUrl}/marketplace/info`);
+      this.marketplaceWallet = response.data.marketplaceWallet;
+      console.log(`📍 Marketplace wallet: ${this.marketplaceWallet}`);
+      console.log(`💰 Commission rate: ${response.data.commissionRate * 100}%`);
+    } catch (error) {
+      throw new Error('Could not initialize consumer: marketplace info unavailable');
+    }
+  }
+
+  async acceptOrder(orderId: string, options: { paymentMethod: 'usdc' | 'athr' }) {
+    // Ensure marketplace wallet is available
+    if (!this.marketplaceWallet) {
+      throw new Error('Marketplace wallet not initialized. Did you call init()?');
+    }
+
+    // Create signed payment to dynamic marketplace wallet
+    const paymentHeader = await this.settlementAgent.createSignedPayment(
+      this.marketplaceWallet,  // ← Dynamic wallet address
+      amount
+    );
+
+    // Submit payment
+    await axios.post(`${this.apiUrl}/orders/${orderId}/accept`, {
+      paymentHeader
+    });
+  }
+}
+```
+
+### Backend API
+
+#### GET /marketplace/info
+
+Returns marketplace configuration.
+
+**Response:**
+```json
+{
+  "marketplaceWallet": "string",
+  "commissionRate": 0.10,
+  "commissionWallet": "string",
+  "supportedTokens": ["USDC", "ATHR"],
+  "usdcMint": "string",
+  "athrMint": "string"
+}
+```
+
+**Implementation:**
+```typescript
+// marketplace.controller.ts
+@Get('info')
+getInfo() {
+  return this.marketplaceService.getInfo();
+}
+
+// marketplace.service.ts
+getInfo() {
+  return {
+    marketplaceWallet: this.marketplaceWallet.publicKey.toBase58(),
+    commissionRate: this.commissionRate,
+    commissionWallet: this.commissionWallet.toBase58(),
+    supportedTokens: ['USDC', 'ATHR'],
+    usdcMint: this.usdcMint.toBase58(),
+    athrMint: this.athrMint.toBase58(),
+  };
+}
+```
+
+### Error Handling
+
+```typescript
+// Consumer must call init() before any operations
+const consumer = new MarketplaceConsumer({ apiUrl, wallet });
+
+try {
+  await consumer.init();  // ← Fetches marketplace wallet
+} catch (error) {
+  console.error('Failed to initialize consumer:', error);
+  // Handle: network error, backend down, etc.
+}
+
+// Operations will fail if init() not called
+try {
+  await consumer.acceptOrder(orderId, { paymentMethod: 'usdc' });
+} catch (error) {
+  if (error.message.includes('not initialized')) {
+    console.error('Must call init() first!');
+  }
+}
 ```
 
 ## Detailed Steps
@@ -397,7 +540,7 @@ transaction.add(
 ```typescript
 // Use devnet for testing
 const consumer = new MarketplaceConsumer({
-  apiUrl: 'https://marketplace-devnet.aether.com/api',
+  apiUrl: 'https://marketplace-devnet.getaether.xyz/api',
   wallet: testWallet
 });
 
@@ -410,7 +553,7 @@ const consumer = new MarketplaceConsumer({
 ```typescript
 // Switch to mainnet
 const consumer = new MarketplaceConsumer({
-  apiUrl: 'https://marketplace.aether.com/api',
+  apiUrl: 'https://marketplace.getaether.xyz/api',
   wallet: prodWallet
 });
 

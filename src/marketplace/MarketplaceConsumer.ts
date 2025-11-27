@@ -25,7 +25,7 @@ import {
  * @example
  * ```typescript
  * const consumer = new MarketplaceConsumer({
- *   apiUrl: 'https://marketplace.aether.com/api',
+ *   apiUrl: 'https://marketplace.getaether.xyz/api',
  *   wallet: myKeypair
  * });
  *

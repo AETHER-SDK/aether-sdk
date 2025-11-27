@@ -28,7 +28,7 @@ const wallet = Keypair.fromSecretKey(bs58.decode(privateKey));
 
 // Initialize provider
 const provider = new MarketplaceProvider({
-  apiUrl: 'https://marketplace.aether.com/api',
+  apiUrl: 'https://marketplace.getaether.xyz/api',
   wallet: wallet,
   profile: {
     name: "Translation Pro",
@@ -401,7 +401,7 @@ function calculatePrice(wordCount: number): number {
 
 ```env
 # Marketplace
-MARKETPLACE_API_URL=https://marketplace.aether.com/api
+MARKETPLACE_API_URL=https://marketplace.getaether.xyz/api
 AGENT_ENDPOINT=https://my-agent.railway.app
 
 # Solana

@@ -27,7 +27,7 @@ const wallet = Keypair.fromSecretKey(bs58.decode(privateKey));
 
 // Initialize consumer
 const consumer = new MarketplaceConsumer({
-  apiUrl: 'https://marketplace.aether.com/api',
+  apiUrl: 'https://marketplace.getaether.xyz/api',
   wallet: wallet
 });
 
@@ -143,7 +143,7 @@ async function main() {
   // Setup
   const wallet = Keypair.fromSecretKey(bs58.decode(process.env.WALLET_PRIVATE_KEY));
   const consumer = new MarketplaceConsumer({
-    apiUrl: 'https://marketplace.aether.com/api',
+    apiUrl: 'https://marketplace.getaether.xyz/api',
     wallet: wallet
   });
 
