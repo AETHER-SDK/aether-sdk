@@ -18,14 +18,14 @@
     {
       "group": "Guides",
       "pages": [
-        ["Consumer Guide", "/consumer-guide"],
-        ["Provider Guide", "/provider-guide"]
+        ["Consumer Guide", "/AETHER-SDK/aether-sdk/consumer-guide"],
+        ["Provider Guide", "/AETHER-SDK/aether-sdk/provider-guide"]
       ]
     },
     {
       "group": "Technical",
       "pages": [
-        ["Architecture", "/architecture"],
+        ["Architecture", "/AETHER-SDK/aether-sdk/architecture"],
         ["Payment Flow", "/payment-flow"],
         ["API Reference", "/api-reference"]
       ]
