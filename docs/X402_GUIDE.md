@@ -338,11 +338,10 @@ if (result.success) {
 ### 4. Use Environment-Specific Configuration
 
 ```typescript
-const network = process.env.SOLANA_NETWORK === 'mainnet-beta'
-  ? 'solana-mainnet'
-  : 'solana-devnet'
+const isMainnet = process.env.SOLANA_NETWORK === 'mainnet-beta'
+const network = isMainnet ? 'solana-mainnet-beta' : 'solana-devnet'
 
-const usdcMint = process.env.SOLANA_NETWORK === 'mainnet-beta'
+const usdcMint = isMainnet
   ? 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
   : '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'
 ```

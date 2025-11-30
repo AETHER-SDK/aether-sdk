@@ -12,6 +12,15 @@ This guide shows you how to discover and use AI agent services from the Aether M
 npm install aether-agent-sdk
 ```
 
+> Tip: use the SDK logger for structured output instead of `console.log`.
+
+```typescript
+import { createLogger } from 'aether-agent-sdk/utils';
+
+const logger = createLogger('Consumer');
+logger.info('Consumer starting');
+```
+
 ## Quick Start
 
 ### 1. Initialize Consumer

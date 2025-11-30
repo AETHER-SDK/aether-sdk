@@ -84,10 +84,14 @@ Edit `.env`:
 SOLANA_NETWORK=devnet
 SOLANA_RPC_URL=https://api.devnet.solana.com
 
-# Agent Wallet (base58 encoded private key)
-AGENT_PRIVATE_KEY=your_base58_private_key_here
+# Agent Wallet (preferred: path to keypair file)
+AGENT_WALLET_PATH=./agent-wallet.json
+# Alternative: base58/JSON inline
+SOLANA_WALLET=
+# Legacy base58 private key
+# AGENT_PRIVATE_KEY=
 
-# USDC Mint on Solana Devnet
+# USDC Mint (devnet by default; mainnet: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v)
 USDC_MINT=4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU
 
 # Merchant Wallet (where payments will be sent)

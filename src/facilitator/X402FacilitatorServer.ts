@@ -3,7 +3,7 @@ import { Token, TOKEN_PROGRAM_ID } from '@solana/spl-token'
 import { loadEnvIfNeeded } from '../utils/env'
 import { resolveSolanaNetwork } from '../utils/solana'
 import { loadKeypairFromEnv } from '../utils/wallet'
-import chalk from 'chalk'
+import { createLogger } from '../utils/logger'
 
 loadEnvIfNeeded()
 
@@ -13,6 +13,7 @@ export class X402FacilitatorServer {
   private usdcMint: PublicKey
   private networkId: string
   private seenNonces: Map<string, number>
+  private logger = createLogger('X402Facilitator')
 
   constructor() {
     const { rpcUrl, networkId } = resolveSolanaNetwork()
@@ -27,32 +28,32 @@ export class X402FacilitatorServer {
       const { keypair } = loadKeypairFromEnv()
       if (keypair) {
         this.agentWallet = keypair
-        console.log(chalk.green(`✅ Facilitator initialized with wallet: ${this.agentWallet.publicKey.toBase58()}`))
+        this.logger.info(`Facilitator initialized with wallet ${this.agentWallet.publicKey.toBase58()}`)
       } else {
-        console.warn(chalk.yellow('⚠️  AGENT_PRIVATE_KEY/AGENT_WALLET_PATH not configured. Some features will be unavailable.'))
+        this.logger.warn('AGENT_PRIVATE_KEY/AGENT_WALLET_PATH not configured. Some features will be unavailable.')
       }
     } catch (error) {
-      console.error(chalk.red('❌ Failed to load facilitator wallet:'), error)
+      this.logger.error('Failed to load facilitator wallet', error)
     }
   }
 
   async verify(paymentHeader: string, paymentRequirements: any): Promise<any> {
     try {
-      console.log(chalk.blue('🔍 Facilitator: Verifying payment...'))
+      this.logger.info('Verifying payment header')
 
       const paymentPayload = JSON.parse(Buffer.from(paymentHeader, 'base64').toString())
 
       const validation = await this.validatePaymentLocally(paymentPayload, paymentRequirements)
 
       if (validation.isValid) {
-        console.log(chalk.green('✅ Facilitator: Payment verification successful'))
+        this.logger.info('Payment verification successful')
         return { isValid: true, invalidReason: null }
       } else {
-        console.log(chalk.red('❌ Facilitator: Payment verification failed'))
+        this.logger.warn('Payment verification failed')
         return { isValid: false, invalidReason: validation.reason || 'Local validation failed' }
       }
     } catch (error) {
-      console.error('❌ Facilitator: Verification error:', error)
+      this.logger.error('Verification error', error)
       return {
         isValid: false,
         invalidReason: `Verification error: ${(error as Error).message}`
@@ -63,61 +64,61 @@ export class X402FacilitatorServer {
   private async validatePaymentLocally(paymentPayload: any, requirements: any): Promise<{ isValid: boolean; reason?: string }> {
     try {
       if (paymentPayload.x402Version !== 1) {
-        console.log(chalk.red('❌ Invalid x402 version'))
+        this.logger.warn('Invalid x402 version')
         return { isValid: false, reason: 'Invalid x402 version' }
       }
 
       if (paymentPayload.scheme !== requirements.scheme) {
-        console.log(chalk.red('❌ Scheme mismatch'))
+        this.logger.warn('Scheme mismatch')
         return { isValid: false, reason: 'Scheme mismatch' }
       }
 
       if (paymentPayload.network !== this.networkId) {
-        console.log(chalk.red(`❌ Network mismatch - expected ${this.networkId}`))
+        this.logger.warn(`Network mismatch - expected ${this.networkId}`)
         return { isValid: false, reason: 'Network mismatch' }
       }
 
       const authorization = paymentPayload.payload?.authorization
       if (!authorization) {
-        console.log(chalk.red('❌ No authorization found'))
+        this.logger.warn('No authorization found')
         return { isValid: false, reason: 'No authorization found' }
       }
 
       if (authorization.value !== requirements.maxAmountRequired) {
-        console.log(chalk.red('❌ Amount mismatch'))
+        this.logger.warn('Amount mismatch')
         return { isValid: false, reason: 'Amount mismatch' }
       }
 
       if (authorization.to !== requirements.payTo) {
-        console.log(chalk.red('❌ Recipient mismatch'))
+        this.logger.warn('Recipient mismatch')
         return { isValid: false, reason: 'Recipient mismatch' }
       }
 
       if (authorization.asset !== requirements.asset) {
-        console.log(chalk.red('❌ Asset mint mismatch'))
+        this.logger.warn('Asset mint mismatch')
         return { isValid: false, reason: 'Asset mismatch' }
       }
 
       const now = Math.floor(Date.now() / 1000)
       if (!authorization.validBefore || now > authorization.validBefore) {
-        console.log(chalk.red('❌ Payment expired or missing validBefore'))
+        this.logger.warn('Payment expired or missing validBefore')
         return { isValid: false, reason: 'Payment expired' }
       }
 
       if (requirements.maxTimeoutSeconds && authorization.validBefore - now > requirements.maxTimeoutSeconds + 30) {
-        console.log(chalk.red('❌ validBefore too far in the future'))
+        this.logger.warn('validBefore too far in the future')
         return { isValid: false, reason: 'Invalid validity window' }
       }
 
       const nonce = authorization.nonce
       if (!nonce) {
-        console.log(chalk.red('❌ Missing nonce'))
+        this.logger.warn('Missing nonce')
         return { isValid: false, reason: 'Missing nonce' }
       }
 
       this.cleanupNonces()
       if (this.seenNonces.has(nonce)) {
-        console.log(chalk.red('❌ Replay detected (nonce already used)'))
+        this.logger.warn('Replay detected (nonce already used)')
         return { isValid: false, reason: 'Replay detected' }
       }
 
@@ -128,7 +129,7 @@ export class X402FacilitatorServer {
       if (paymentPayload.payload?.transactionMeta?.lastValidBlockHeight) {
         const currentHeight = await this.connection.getBlockHeight('confirmed')
         if (currentHeight > paymentPayload.payload.transactionMeta.lastValidBlockHeight) {
-          console.log(chalk.red('❌ Transaction blockhash expired'))
+          this.logger.warn('Transaction blockhash expired')
           return { isValid: false, reason: 'Blockhash expired' }
         }
       }
@@ -140,26 +141,26 @@ export class X402FacilitatorServer {
         }
       }
 
-      console.log(chalk.green('✅ All local validations passed'))
+      this.logger.info('All local validations passed')
       return { isValid: true }
     } catch (error) {
-      console.error('❌ Local validation error:', error)
+      this.logger.error('Local validation error', error)
       return { isValid: false, reason: (error as Error).message }
     }
   }
 
   async settle(paymentHeader: string, paymentRequirements: any): Promise<any> {
     try {
-      console.log(chalk.blue('🏦 Facilitator: Settling payment on Solana...'))
+      this.logger.info('Settling payment on Solana')
 
       const paymentPayload = JSON.parse(Buffer.from(paymentHeader, 'base64').toString())
 
       const txHash = await this.executeUSDCTransfer(paymentPayload, paymentRequirements)
 
       if (txHash) {
-        console.log(chalk.green('✅ Facilitator: Payment settled successfully'))
-        console.log(chalk.blue(`📋 Transaction Signature: ${txHash}`))
-        console.log(chalk.blue(`📋 Network: ${this.networkId}`))
+        this.logger.info('Payment settled successfully')
+        this.logger.info(`Transaction Signature: ${txHash}`)
+        this.logger.info(`Network: ${this.networkId}`)
 
         return {
           success: true,
@@ -168,7 +169,7 @@ export class X402FacilitatorServer {
           networkId: this.networkId
         }
       } else {
-        console.log(chalk.red('❌ Facilitator: Payment settlement failed'))
+        this.logger.warn('Payment settlement failed')
         return {
           success: false,
           error: 'Failed to execute transfer',
@@ -177,7 +178,7 @@ export class X402FacilitatorServer {
         }
       }
     } catch (error) {
-      console.error('❌ Facilitator: Settlement error:', error)
+      this.logger.error('Facilitator settlement error', error)
       return {
         success: false,
         error: `Settlement error: ${(error as Error).message}`,
@@ -189,7 +190,7 @@ export class X402FacilitatorServer {
 
   private async executeUSDCTransfer(paymentPayload: any, requirements: any): Promise<string | null> {
     try {
-      console.log(chalk.blue('💰 Processing x402 payment on Solana...'))
+      this.logger.info('Processing x402 payment on Solana')
 
       const authorization = paymentPayload.payload?.authorization
       if (!authorization) {
@@ -201,26 +202,26 @@ export class X402FacilitatorServer {
 
       if (signedTransactionBase64) {
         // Standard x402 flow: Submit pre-signed transaction
-        console.log(chalk.blue('📋 Pre-signed transaction detected (standard x402 flow)'))
-        console.log(chalk.blue(`📋 From: ${authorization.from}`))
-        console.log(chalk.blue(`📋 To: ${authorization.to}`))
-        console.log(chalk.blue(`📋 Amount: ${Number(authorization.value) / 1_000_000} USDC`))
+        this.logger.info('Pre-signed transaction detected (standard x402 flow)')
+        this.logger.debug(`From: ${authorization.from}`)
+        this.logger.debug(`To: ${authorization.to}`)
+        this.logger.debug(`Amount: ${Number(authorization.value) / 1_000_000} USDC`)
 
         // Deserialize the transaction
         const transactionBuffer = Buffer.from(signedTransactionBase64, 'base64')
         const transaction = Transaction.from(transactionBuffer)
 
-        console.log(chalk.yellow('📋 Submitting pre-signed transaction to Solana...'))
+        this.logger.info('Submitting pre-signed transaction to Solana')
         const signature = await this.sendTransactionWithRetry(
           transaction,
           paymentPayload.payload.transactionMeta
         )
-        console.log(chalk.green(`✅ Transaction confirmed: ${signature}`))
+        this.logger.info(`Transaction confirmed: ${signature}`)
         return signature
 
       } else {
         // Fallback: Old behavior (facilitator creates and executes the transaction)
-        console.log(chalk.yellow('⚠️  No pre-signed transaction - using legacy flow'))
+        this.logger.warn('No pre-signed transaction - using legacy flow')
 
         if (!this.agentWallet) {
           throw new Error('Agent wallet not initialized (required for legacy flow)')
@@ -244,15 +245,15 @@ export class X402FacilitatorServer {
           recipientAddress
         )
 
-        console.log(chalk.blue(`📋 Current USDC balance: ${Number(fromTokenAccount.amount) / 1_000_000} USDC`))
-        console.log(chalk.blue(`📋 Transfer amount: ${amount / 1_000_000} USDC`))
-        console.log(chalk.blue(`📋 Recipient: ${recipientAddress.toBase58()}`))
+        this.logger.debug(`Current USDC balance: ${Number(fromTokenAccount.amount) / 1_000_000} USDC`)
+        this.logger.info(`Transfer amount: ${amount / 1_000_000} USDC`)
+        this.logger.info(`Recipient: ${recipientAddress.toBase58()}`)
 
         if (Number(fromTokenAccount.amount) < amount) {
           throw new Error(`Insufficient USDC balance: ${Number(fromTokenAccount.amount) / 1_000_000} < ${amount / 1_000_000}`)
         }
 
-        console.log(chalk.yellow('📋 Submitting transaction...'))
+        this.logger.info('Submitting transaction')
         const signature = await token.transfer(
           fromTokenAccount.address,
           toTokenAccount.address,
@@ -261,12 +262,12 @@ export class X402FacilitatorServer {
           amount
         )
 
-        console.log(chalk.green(`✅ Transfer confirmed: ${signature}`))
+        this.logger.info(`Transfer confirmed: ${signature}`)
         return signature
       }
 
     } catch (error) {
-      console.error('❌ USDC transfer error:', error)
+      this.logger.error('USDC transfer error', error)
       return null
     }
   }

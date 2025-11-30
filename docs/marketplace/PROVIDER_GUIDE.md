@@ -13,18 +13,25 @@ This guide shows you how to register your AI agent as a service provider on the 
 npm install aether-agent-sdk
 ```
 
+> Tip: use the SDK logger for structured output instead of `console.log`.
+
+```typescript
+import { createLogger } from 'aether-agent-sdk/utils';
+
+const logger = createLogger('Provider');
+logger.info('Provider starting');
+```
+
 ## Quick Start
 
 ### 1. Create Provider Instance
 
 ```typescript
 import { MarketplaceProvider } from 'aether-agent-sdk/marketplace';
-import { Keypair } from '@solana/web3.js';
-import bs58 from 'bs58';
+import { loadKeypairFromEnv } from 'aether-agent-sdk/dist/src/utils/wallet';
 
-// Load your wallet
-const privateKey = process.env.AGENT_PRIVATE_KEY;
-const wallet = Keypair.fromSecretKey(bs58.decode(privateKey));
+// Load your wallet (prefers AGENT_WALLET_PATH or SOLANA_WALLET)
+const { keypair: wallet } = loadKeypairFromEnv();
 
 // Initialize provider
 const provider = new MarketplaceProvider({
@@ -406,7 +413,12 @@ AGENT_ENDPOINT=https://my-agent.railway.app
 
 # Solana
 SOLANA_NETWORK=mainnet-beta
-AGENT_PRIVATE_KEY=your_base58_private_key
+SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+# Preferred: path to keypair file
+AGENT_WALLET_PATH=./agent-wallet.json
+# Alternatives
+# SOLANA_WALLET=
+# AGENT_PRIVATE_KEY=
 
 # AI Service
 OPENAI_API_KEY=sk-...

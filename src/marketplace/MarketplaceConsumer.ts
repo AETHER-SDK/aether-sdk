@@ -5,6 +5,7 @@
 
 import axios from 'axios';
 import { SettlementAgent } from '../agents/SettlementAgent';
+import { createLogger } from '../utils/logger';
 import {
   MarketplaceSearchFilters,
   AgentSearchResult,
@@ -25,9 +26,9 @@ import {
  * @example
  * ```typescript
  * const consumer = new MarketplaceConsumer({
- *   apiUrl: 'https://marketplace.getaether.xyz/api',
- *   wallet: myKeypair
- * });
+  *   apiUrl: 'https://marketplace.getaether.xyz/api',
+  *   wallet: myKeypair
+  * });
  *
  * // Search for translation agents
  * const agents = await consumer.search({
@@ -49,7 +50,7 @@ import {
  *
  * // Listen for delivery
  * conversation.on('delivery', async (delivery) => {
- *   console.log('Received:', delivery.result);
+ *   // handle delivery
  *   await conversation.review({ rating: 5 });
  * });
  * ```
@@ -59,6 +60,7 @@ export class MarketplaceConsumer {
   private wallet: any;
   private settlementAgent: SettlementAgent;
   private marketplaceWallet?: string;
+  private logger = createLogger('MarketplaceConsumer');
 
   constructor(config: Omit<MarketplaceConfig, 'role' | 'profile' | 'services'>) {
     this.apiUrl = config.apiUrl;
@@ -77,10 +79,10 @@ export class MarketplaceConsumer {
     try {
       const response = await axios.get(`${this.apiUrl}/marketplace/info`);
       this.marketplaceWallet = response.data.marketplaceWallet;
-      console.log(`📍 Marketplace wallet fetched: ${this.marketplaceWallet}`);
-      console.log(`💰 Commission rate: ${(response.data.commissionRate * 100).toFixed(0)}%`);
+      this.logger.info(`Marketplace wallet fetched: ${this.marketplaceWallet}`);
+      this.logger.info(`Commission rate: ${(response.data.commissionRate * 100).toFixed(0)}%`);
     } catch (error: any) {
-      console.error('⚠️  Failed to fetch marketplace info:', error.message);
+      this.logger.error('Failed to fetch marketplace info', error.message);
       throw new Error('Could not initialize consumer: marketplace info unavailable');
     }
   }
@@ -96,7 +98,7 @@ export class MarketplaceConsumer {
 
       return response.data.agents || [];
     } catch (error: any) {
-      console.error('❌ Search failed:', error.message);
+      this.logger.error('Search failed', error.message);
       throw error;
     }
   }
@@ -109,7 +111,7 @@ export class MarketplaceConsumer {
       const response = await axios.get(`${this.apiUrl}/agents/${agentId}`);
       return response.data;
     } catch (error: any) {
-      console.error('❌ Failed to get agent:', error.message);
+      this.logger.error('Failed to get agent', error.message);
       throw error;
     }
   }
@@ -149,7 +151,7 @@ export class MarketplaceConsumer {
         status: 'active'
       };
 
-      console.log('💬 Conversation started:', conversation.id);
+      this.logger.info(`Conversation started: ${conversation.id}`);
 
       // Ensure marketplace wallet is available
       if (!this.marketplaceWallet) {
@@ -164,7 +166,7 @@ export class MarketplaceConsumer {
         this.marketplaceWallet
       );
     } catch (error: any) {
-      console.error('❌ Failed to start conversation:', error.message);
+      this.logger.error('Failed to start conversation', error.message);
       throw error;
     }
   }
@@ -190,7 +192,7 @@ export class MarketplaceConsumer {
         this.marketplaceWallet
       );
     } catch (error: any) {
-      console.error('❌ Failed to get conversation:', error.message);
+      this.logger.error('Failed to get conversation', error.message);
       throw error;
     }
   }
@@ -206,7 +208,7 @@ export class MarketplaceConsumer {
 
       return response.data.conversations || [];
     } catch (error: any) {
-      console.error('❌ Failed to get conversations:', error.message);
+      this.logger.error('Failed to get conversations', error.message);
       throw error;
     }
   }
@@ -219,7 +221,7 @@ export class MarketplaceConsumer {
       const response = await axios.get(`${this.apiUrl}/orders/${orderId}`);
       return response.data;
     } catch (error: any) {
-      console.error('❌ Failed to get order:', error.message);
+      this.logger.error('Failed to get order', error.message);
       throw error;
     }
   }
@@ -238,7 +240,7 @@ export class MarketplaceConsumer {
 
       return response.data.orders || [];
     } catch (error: any) {
-      console.error('❌ Failed to get orders:', error.message);
+      this.logger.error('Failed to get orders', error.message);
       throw error;
     }
   }
@@ -257,6 +259,7 @@ export class ConversationWrapper {
   private messageHandlers: ((msg: ConversationMessage) => void)[] = [];
   private deliveryHandlers: ((delivery: Delivery) => void)[] = [];
   private pollingInterval?: NodeJS.Timeout;
+  private logger: ReturnType<typeof createLogger>;
 
   constructor(
     conversation: Conversation,
@@ -270,6 +273,7 @@ export class ConversationWrapper {
     this.wallet = wallet;
     this.settlementAgent = settlementAgent;
     this.marketplaceWallet = marketplaceWallet;
+    this.logger = createLogger(`Conversation:${conversation.id}`);
   }
 
   /**
@@ -290,7 +294,7 @@ export class ConversationWrapper {
         attachments,
       });
     } catch (error: any) {
-      console.error('❌ Failed to send message:', error.message);
+      this.logger.error('Failed to send message', error.message);
       throw error;
     }
   }
@@ -307,7 +311,7 @@ export class ConversationWrapper {
 
       return response.data.messages || [];
     } catch (error: any) {
-      console.error('❌ Failed to get messages:', error.message);
+      this.logger.error('Failed to get messages', error.message);
       throw error;
     }
   }
@@ -324,8 +328,8 @@ export class ConversationWrapper {
       const orderResponse = await axios.get(`${this.apiUrl}/orders/${orderId}`);
       const order: Order = orderResponse.data;
 
-      console.log(`💳 Accepting order ${orderId}`);
-      console.log(`📊 Price: ${order.price} USDC`);
+      this.logger.info(`Accepting order ${orderId}`);
+      this.logger.info(`Price: ${order.price} USDC`);
 
       // Ensure marketplace wallet is available
       if (!this.marketplaceWallet) {
@@ -336,9 +340,9 @@ export class ConversationWrapper {
       // Backend will split 90% to agent, 10% commission
       const amount = options.paymentMethod === 'athr' ? order.price * 0.75 : order.price;
 
-      console.log(`💰 Creating x402 payment to marketplace (${amount} ${options.paymentMethod.toUpperCase()})`);
-      console.log(`📍 Marketplace wallet: ${this.marketplaceWallet}`);
-      console.log(`📌 Backend will split: 90% to agent, 10% commission`);
+      this.logger.info(`Creating x402 payment to marketplace (${amount} ${options.paymentMethod.toUpperCase()})`);
+      this.logger.info(`Marketplace wallet: ${this.marketplaceWallet}`);
+      this.logger.info('Backend will split: 90% to agent, 10% commission');
 
       const paymentHeader = await this.settlementAgent.createSignedPayment(
         this.marketplaceWallet, // Pay marketplace, not agent directly
@@ -352,14 +356,14 @@ export class ConversationWrapper {
         paymentHeader,
       });
 
-      console.log('✅ Order accepted and paid:', orderId);
-      console.log('📝 Payment TX:', response.data.transactionSignature);
-      console.log(`💸 Agent receives: ${response.data.agentAmount} USDC`);
-      console.log(`💰 Commission: ${response.data.commissionAmount} USDC`);
+      this.logger.info(`Order accepted and paid: ${orderId}`);
+      this.logger.info(`Payment TX: ${response.data.transactionSignature}`);
+      this.logger.info(`Agent receives: ${response.data.agentAmount} USDC`);
+      this.logger.info(`Commission: ${response.data.commissionAmount} USDC`);
 
       return response.data;
     } catch (error: any) {
-      console.error('❌ Failed to accept order:', error.message);
+      this.logger.error('Failed to accept order', error.message);
       throw error;
     }
   }
@@ -374,14 +378,14 @@ export class ConversationWrapper {
         reason,
       });
 
-      console.log('❌ Order declined:', orderId);
+      this.logger.info(`Order declined: ${orderId}`);
 
       // Optionally send message to agent
       if (reason) {
         await this.send(`I'm declining the order: ${reason}`);
       }
     } catch (error: any) {
-      console.error('❌ Failed to decline order:', error.message);
+      this.logger.error('Failed to decline order', error.message);
       throw error;
     }
   }
@@ -403,12 +407,12 @@ export class ConversationWrapper {
         ...offer,
       });
 
-      console.log('💬 Counter-offer sent:', orderId);
+      this.logger.info(`Counter-offer sent: ${orderId}`);
 
       // Send message to agent
       await this.send(offer.message);
     } catch (error: any) {
-      console.error('❌ Failed to send counter-offer:', error.message);
+      this.logger.error('Failed to send counter-offer', error.message);
       throw error;
     }
   }
@@ -423,9 +427,9 @@ export class ConversationWrapper {
         ...review,
       });
 
-      console.log('⭐ Review submitted:', orderId);
+      this.logger.info(`Review submitted: ${orderId}`);
     } catch (error: any) {
-      console.error('❌ Failed to submit review:', error.message);
+      this.logger.error('Failed to submit review', error.message);
       throw error;
     }
   }

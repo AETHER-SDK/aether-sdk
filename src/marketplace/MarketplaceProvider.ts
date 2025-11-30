@@ -4,6 +4,7 @@
  */
 
 import axios from 'axios';
+import { createLogger } from '../utils/logger';
 import {
   AgentProfile,
   AgentService,
@@ -67,6 +68,7 @@ export class MarketplaceProvider {
   private orderPaidHandler?: OrderPaidHandler;
   private pollingInterval?: NodeJS.Timeout;
   private agentId?: string;
+  private logger = createLogger('MarketplaceProvider');
 
   constructor(config: Omit<MarketplaceConfig, 'role'> & { profile: AgentProfile; services: AgentService[] }) {
     this.apiUrl = config.apiUrl;
@@ -91,14 +93,14 @@ export class MarketplaceProvider {
         stakeAmount: options.stakeAmount,
       });
 
-      console.log('✅ Agent registered on marketplace:', response.data.agentId);
+      this.logger.info(`Agent registered on marketplace: ${response.data.agentId}`);
 
       // Store agent ID
       this.agentId = response.data.agentId;
 
       // Step 2: Create services if any
       if (this.services && this.services.length > 0) {
-        console.log(`📋 Creating ${this.services.length} services...`);
+        this.logger.info(`Creating ${this.services.length} services...`);
 
         for (const service of this.services) {
           try {
@@ -112,9 +114,9 @@ export class MarketplaceProvider {
               requirements: service.examples?.join('\n') || undefined,
               imageUrl: service.imageUrl,
             });
-            console.log(`  ✅ Service created: ${service.title}`);
+            this.logger.info(`Service created: ${service.title}`);
           } catch (serviceError: any) {
-            console.error(`  ❌ Failed to create service "${service.title}":`, serviceError.message);
+            this.logger.error(`Failed to create service "${service.title}"`, serviceError.message);
           }
         }
       }
@@ -126,22 +128,22 @@ export class MarketplaceProvider {
 
       if (errorMsg.includes('already have an agent') || errorMsg.includes('already registered')) {
         // Agent already exists - try to get its ID
-        console.log('ℹ️  Agent already registered, fetching existing agent ID...');
+        this.logger.info('Agent already registered, fetching existing agent ID');
         try {
           const existingAgent = await this.getExistingAgentId();
           if (existingAgent) {
             this.agentId = existingAgent.agentId;
-            console.log('✅ Using existing agent ID:', this.agentId);
+            this.logger.info(`Using existing agent ID: ${this.agentId}`);
             return { agentId: this.agentId };
           }
         } catch (fetchError) {
-          console.error('❌ Failed to fetch existing agent ID');
+          this.logger.error('Failed to fetch existing agent ID');
         }
       } else {
         // It's a real error - log it
-        console.error('❌ Failed to register agent:', error.message);
+        this.logger.error('Failed to register agent', error.message);
         if (error.response?.data?.message) {
-          console.error('   Validation errors:', error.response.data.message);
+          this.logger.error('Validation errors', error.response.data.message);
         }
       }
 
@@ -177,9 +179,9 @@ export class MarketplaceProvider {
       });
 
       this.profile = { ...this.profile, ...updates };
-      console.log('✅ Profile updated');
+      this.logger.info('Profile updated');
     } catch (error: any) {
-      console.error('❌ Failed to update profile:', error.message);
+      this.logger.error('Failed to update profile', error.message);
       throw error;
     }
   }
@@ -195,9 +197,9 @@ export class MarketplaceProvider {
       });
 
       this.services = services;
-      console.log('✅ Services updated');
+      this.logger.info('Services updated');
     } catch (error: any) {
-      console.error('❌ Failed to update services:', error.message);
+      this.logger.error('Failed to update services', error.message);
       throw error;
     }
   }
@@ -227,7 +229,7 @@ export class MarketplaceProvider {
         orderProposal,
       });
     } catch (error: any) {
-      console.error('❌ Failed to send message:', error.message);
+      this.logger.error('Failed to send message', error.message);
       throw error;
     }
   }
@@ -243,10 +245,10 @@ export class MarketplaceProvider {
         ...proposal,
       });
 
-      console.log('📄 Order created:', response.data.orderId);
+      this.logger.info(`Order created: ${response.data.orderId}`);
       return response.data;
     } catch (error: any) {
-      console.error('❌ Failed to create order:', error.message);
+      this.logger.error('Failed to create order', error.message);
       throw error;
     }
   }
@@ -261,9 +263,9 @@ export class MarketplaceProvider {
         ...delivery,
       });
 
-      console.log('✅ Order delivered:', orderId);
+      this.logger.info(`Order delivered: ${orderId}`);
     } catch (error: any) {
-      console.error('❌ Failed to deliver order:', error.message);
+      this.logger.error('Failed to deliver order', error.message);
       throw error;
     }
   }
@@ -284,7 +286,7 @@ export class MarketplaceProvider {
 
       return response.data;
     } catch (error: any) {
-      console.error('❌ Failed to fetch stats:', error.message);
+      this.logger.error('Failed to fetch stats', error.message);
       throw error;
     }
   }
@@ -293,8 +295,8 @@ export class MarketplaceProvider {
    * Start listening for messages and orders
    */
   start(pollIntervalMs: number = 5000): void {
-    console.log('🚀 Marketplace Provider started');
-    console.log(`📡 Polling every ${pollIntervalMs}ms for new messages and orders`);
+    this.logger.info('Marketplace Provider started');
+    this.logger.info(`Polling every ${pollIntervalMs}ms for new messages and orders`);
 
     this.pollingInterval = setInterval(async () => {
       try {
@@ -304,7 +306,7 @@ export class MarketplaceProvider {
         // Poll for paid orders
         await this.pollOrders();
       } catch (error: any) {
-        console.error('❌ Polling error:', error.message);
+        this.logger.error('Polling error', error.message);
       }
     }, pollIntervalMs);
   }
@@ -315,7 +317,7 @@ export class MarketplaceProvider {
   stop(): void {
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
-      console.log('🛑 Marketplace Provider stopped');
+      this.logger.info('Marketplace Provider stopped');
     }
   }
 

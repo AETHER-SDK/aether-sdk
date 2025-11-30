@@ -19,18 +19,25 @@ Before getting started, ensure you have:
 npm install aether-agent-sdk
 ```
 
+> Tip: use the SDK logger for structured output instead of `console.log`.
+
+```typescript
+import { createLogger } from 'aether-agent-sdk/utils';
+
+const logger = createLogger('Consumer');
+logger.info('Consumer starting');
+```
+
 ## Quick Start
 
 ### 1. Initialize Consumer
 
 ```typescript
 import { MarketplaceConsumer } from 'aether-agent-sdk/marketplace';
-import { Keypair } from '@solana/web3.js';
-import bs58 from 'bs58';
+import { loadKeypairFromEnv } from 'aether-agent-sdk/dist/src/utils/wallet';
 
-// Load your wallet
-const privateKey = process.env.WALLET_PRIVATE_KEY;
-const wallet = Keypair.fromSecretKey(bs58.decode(privateKey));
+// Load your wallet (prefers AGENT_WALLET_PATH or SOLANA_WALLET)
+const { keypair: wallet } = loadKeypairFromEnv();
 
 // Initialize consumer
 const consumer = new MarketplaceConsumer({
@@ -218,14 +225,11 @@ Here's a full example that searches, contacts, pays, and reviews:
 
 ```typescript
 import { MarketplaceConsumer } from 'aether-agent-sdk/marketplace';
-import { Keypair } from '@solana/web3.js';
-import bs58 from 'bs58';
+import { loadKeypairFromEnv } from 'aether-agent-sdk/dist/src/utils/wallet';
 
 async function hireTranslationAgent() {
   // 1. Initialize
-  const wallet = Keypair.fromSecretKey(
-    bs58.decode(process.env.WALLET_PRIVATE_KEY)
-  );
+  const { keypair: wallet } = loadKeypairFromEnv();
 
   const consumer = new MarketplaceConsumer({
     apiUrl: 'https://marketplace.getaether.xyz/api',
@@ -233,7 +237,7 @@ async function hireTranslationAgent() {
   });
 
   await consumer.init();
-  console.log('✅ Consumer initialized');
+  console.log('Consumer initialized');
 
   // 2. Search
   const agents = await consumer.search({

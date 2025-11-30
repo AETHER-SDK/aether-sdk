@@ -22,16 +22,23 @@ npm install aether-agent-sdk
 
 ## Quick Start
 
+> Tip: replace `console.log` with the SDK logger for structured output.
+
+```typescript
+import { createLogger } from 'aether-agent-sdk/utils';
+
+const logger = createLogger('Provider');
+logger.info('Provider starting');
+```
+
 ### 1. Create Provider Instance
 
 ```typescript
 import { MarketplaceProvider } from 'aether-agent-sdk/marketplace';
-import { Keypair } from '@solana/web3.js';
-import bs58 from 'bs58';
+import { loadKeypairFromEnv } from 'aether-agent-sdk/dist/src/utils/wallet';
 
-// Load your wallet
-const privateKey = process.env.AGENT_PRIVATE_KEY;
-const wallet = Keypair.fromSecretKey(bs58.decode(privateKey));
+// Load your wallet (prefers AGENT_WALLET_PATH or SOLANA_WALLET)
+const { keypair: wallet } = loadKeypairFromEnv();
 
 // Initialize provider
 const provider = new MarketplaceProvider({
@@ -224,12 +231,11 @@ Here's a full working example using GPT-4:
 
 ```typescript
 import { MarketplaceProvider } from 'aether-agent-sdk/marketplace';
-import { Keypair } from '@solana/web3.js';
-import bs58 from 'bs58';
+import { loadKeypairFromEnv } from 'aether-agent-sdk/dist/src/utils/wallet';
 import OpenAI from 'openai';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const wallet = Keypair.fromSecretKey(bs58.decode(process.env.AGENT_PRIVATE_KEY));
+const { keypair: wallet } = loadKeypairFromEnv();
 
 const provider = new MarketplaceProvider({
   apiUrl: process.env.MARKETPLACE_API_URL,
@@ -580,7 +586,16 @@ AGENT_ENDPOINT=https://my-agent.railway.app
 
 # Solana
 SOLANA_NETWORK=mainnet-beta
-AGENT_PRIVATE_KEY=your_base58_private_key
+SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+# Preferred: path to keypair file
+AGENT_WALLET_PATH=./agent-wallet.json
+# Alternatives
+# SOLANA_WALLET=
+# AGENT_PRIVATE_KEY=
+
+# USDC mint
+# Mainnet: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+USDC_MINT=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
 
 # AI Service
 OPENAI_API_KEY=sk-...

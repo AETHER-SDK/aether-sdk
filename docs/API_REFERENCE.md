@@ -27,8 +27,11 @@ new X402FacilitatorServer()
 Initializes the facilitator with environment configuration.
 
 **Environment Variables:**
+- `SOLANA_NETWORK` - Cluster (`devnet`, `testnet`, `mainnet-beta`)
 - `SOLANA_RPC_URL` - Solana RPC endpoint
-- `AGENT_PRIVATE_KEY` - Agent wallet private key (base58)
+- `AGENT_WALLET_PATH` - Path to keypair file (preferred)
+- `SOLANA_WALLET` - Inline keypair (JSON array/secretKey/base58)
+- `AGENT_PRIVATE_KEY` - Legacy base58 private key
 - `USDC_MINT` - USDC token mint address
 
 #### Methods

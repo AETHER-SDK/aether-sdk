@@ -3,7 +3,7 @@ import { Token, TOKEN_PROGRAM_ID } from '@solana/spl-token'
 import { X402FacilitatorServer } from '../facilitator/X402FacilitatorServer'
 import { resolveSolanaNetwork, createNonce, SolanaNetwork } from '../utils/solana'
 import { loadKeypairFromEnv } from '../utils/wallet'
-import chalk from 'chalk'
+import { createLogger } from '../utils/logger'
 import dotenv from 'dotenv'
 
 dotenv.config()
@@ -15,6 +15,7 @@ export class SettlementAgent {
   private merchantWallet?: string
   private networkId: string
   private network: SolanaNetwork
+  private logger = createLogger('SettlementAgent')
 
   constructor(merchantWallet?: string) {
     const { network, rpcUrl, networkId } = resolveSolanaNetwork()
@@ -35,15 +36,15 @@ export class SettlementAgent {
       const { keypair } = loadKeypairFromEnv()
       if (keypair) {
         this.agentWallet = keypair
-        console.log(chalk.green(`✅ Settlement Agent initialized with wallet: ${this.agentWallet.publicKey.toBase58()}`))
+        this.logger.info(`Settlement Agent initialized with wallet ${this.agentWallet.publicKey.toBase58()}`)
       }
     } catch (error) {
-      console.error(chalk.red('❌ Failed to load agent wallet:'), error)
+      this.logger.error('Failed to load agent wallet', error)
     }
   }
 
   async triggerSettlement(verification: any): Promise<void> {
-    console.log(chalk.yellow('🔧 SettlementAgent: Triggering settlement...'))
+    this.logger.info('Triggering settlement flow')
     await this.executeSettlement(verification)
   }
 
@@ -52,19 +53,19 @@ export class SettlementAgent {
       // If a wallet is provided, use it instead of loading from env
       if (wallet) {
         this.agentWallet = wallet
-        console.log(chalk.green(`✅ Settlement Agent initialized with provided wallet: ${wallet.publicKey.toBase58()}`))
+        this.logger.info(`Settlement Agent initialized with provided wallet ${wallet.publicKey.toBase58()}`)
       } else if (!this.agentWallet) {
-        console.warn(chalk.yellow('⚠  AGENT_PRIVATE_KEY not configured. Some features will be unavailable.'))
+        this.logger.warn('AGENT_PRIVATE_KEY not configured. Some features will be unavailable.')
       }
 
       const agentId = process.env.SETTLEMENT_AGENT_ID
-      console.log(chalk.yellow('🔧 Initializing settlement agent...'))
-      console.log(chalk.yellow('✅ SettlementAgent initialized for Solana'))
-      console.log(`🆔 Agent ID: ${agentId}`)
-      console.log(`🌐 RPC URL: ${process.env.SOLANA_RPC_URL}`)
-      console.log(`🌍 Network: ${this.network}`)
+      this.logger.info('Initializing settlement agent')
+      this.logger.info('SettlementAgent ready')
+      this.logger.info(`Agent ID: ${agentId}`)
+      this.logger.info(`RPC URL: ${process.env.SOLANA_RPC_URL}`)
+      this.logger.info(`Network: ${this.network}`)
     } catch (error) {
-      console.error('❌ Failed to initialize SettlementAgent:', error)
+      this.logger.error('Failed to initialize SettlementAgent', error)
       throw error
     }
   }
@@ -99,37 +100,38 @@ export class SettlementAgent {
 
   private async executeSettlement(verification: any): Promise<void> {
     try {
-      console.log(chalk.yellow('💰 Initiating settlement flow on Solana...'))
+      this.logger.info('Initiating settlement flow on Solana')
 
       const requirements = this.createPaymentRequirements()
 
-      console.log(chalk.blue('📋 Step 1: Creating payment authorization...'))
+      this.logger.info('Step 1: Creating payment authorization')
       const paymentPayload = this.createPaymentPayload(requirements)
       const paymentHeader = Buffer.from(JSON.stringify(paymentPayload)).toString('base64')
 
-      console.log(chalk.blue('📋 Payment payload structure:'), JSON.stringify(paymentPayload, null, 2))
+      this.logger.debug('Payment payload structure', JSON.stringify(paymentPayload, null, 2))
 
-      console.log(chalk.blue('📋 Step 2: Verifying payment...'))
+      this.logger.info('Step 2: Verifying payment')
       const verificationResult = await this.facilitator.verify(paymentHeader, requirements)
 
       if (!verificationResult.isValid) {
         throw new Error(`Payment verification failed: ${verificationResult.invalidReason}`)
       }
-      console.log(chalk.green('✅ Payment verification successful'))
+      this.logger.info('Payment verification successful')
 
-      console.log(chalk.blue('📋 Step 3: Settling payment and executing USDC transfer...'))
+      this.logger.info('Step 3: Settling payment and executing USDC transfer')
       const settlementResult = await this.facilitator.settle(paymentHeader, requirements)
 
       if (!settlementResult.success) {
         throw new Error(`Payment settlement failed: ${settlementResult.error}`)
       }
 
-      console.log(chalk.green('✅ Payment settled successfully!'))
-      console.log(chalk.blue(`📋 Transaction signature: ${settlementResult.txHash}`))
-      console.log(chalk.blue(`📋 Explorer: https://explorer.solana.com/tx/${settlementResult.txHash}?cluster=devnet`))
+      this.logger.info('Payment settled successfully')
+      if (settlementResult.txHash) {
+        this.logger.info(`Transaction signature: ${settlementResult.txHash}`)
+      }
 
     } catch (error) {
-      console.error('❌ Error executing settlement:', error)
+      this.logger.error('Error executing settlement', error)
       throw error
     }
   }
@@ -167,9 +169,9 @@ export class SettlementAgent {
         throw new Error('Agent wallet not initialized')
       }
 
-      console.log(chalk.blue(`📝 Creating signed x402 payment...`))
-      console.log(chalk.blue(`💵 Amount: ${amountUsdc} USDC`))
-      console.log(chalk.blue(`📍 Recipient: ${recipientAddress}`))
+      this.logger.info('Creating signed x402 payment')
+      this.logger.info(`Amount: ${amountUsdc} USDC`)
+      this.logger.info(`Recipient: ${recipientAddress}`)
 
       const amountInMicroUsdc = Math.floor(amountUsdc * 1_000_000)
       const recipientPubkey = new PublicKey(recipientAddress)
@@ -192,8 +194,8 @@ export class SettlementAgent {
         recipientPubkey
       )
 
-      console.log(chalk.blue(`📋 From: ${this.agentWallet.publicKey.toBase58()}`))
-      console.log(chalk.blue(`📋 To: ${recipientAddress}`))
+      this.logger.debug(`From: ${this.agentWallet.publicKey.toBase58()}`)
+      this.logger.debug(`To: ${recipientAddress}`)
 
       // Create transfer instruction
       const transferInstruction = Token.createTransferInstruction(
@@ -217,7 +219,7 @@ export class SettlementAgent {
       // Sign transaction
       transaction.sign(this.agentWallet)
 
-      console.log(chalk.green(`✅ Transaction signed`))
+      this.logger.info('Transaction signed')
 
       // Create x402 payload with signed transaction
       const validBefore = Math.floor(Date.now() / 1000) + 300 // 5 minutes
@@ -246,11 +248,11 @@ export class SettlementAgent {
       // Encode to base64
       const paymentHeader = Buffer.from(JSON.stringify(paymentPayload)).toString('base64')
 
-      console.log(chalk.green(`✅ x402 payment created (signed transaction included)`))
+      this.logger.info('x402 payment created (signed transaction included)')
 
       return paymentHeader
     } catch (error) {
-      console.error(chalk.red('❌ Error creating signed payment:'), error)
+      this.logger.error('Error creating signed payment', error)
       throw error
     }
   }
