@@ -6,6 +6,8 @@
  * @packageDocumentation
  */
 
+import packageJson from '../package.json'
+
 // Agents
 export * from './agents'
 
@@ -21,10 +23,9 @@ export * from './utils'
 /**
  * SDK Version
  */
-export const VERSION = '1.0.0'
+export const VERSION = packageJson.version
 
 /**
  * SDK Name
  */
-export const SDK_NAME = 'aether-agent-sdk'
-
+export const SDK_NAME = packageJson.name

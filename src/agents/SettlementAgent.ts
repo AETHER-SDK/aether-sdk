@@ -1,9 +1,10 @@
 import { Connection, PublicKey, Keypair, Transaction } from '@solana/web3.js'
 import { Token, TOKEN_PROGRAM_ID } from '@solana/spl-token'
 import { X402FacilitatorServer } from '../facilitator/X402FacilitatorServer'
+import { resolveSolanaNetwork, createNonce, SolanaNetwork } from '../utils/solana'
+import { loadKeypairFromEnv } from '../utils/wallet'
 import chalk from 'chalk'
 import dotenv from 'dotenv'
-import bs58 from 'bs58'
 
 dotenv.config()
 
@@ -12,10 +13,13 @@ export class SettlementAgent {
   private agentWallet?: Keypair
   private facilitator: X402FacilitatorServer
   private merchantWallet?: string
+  private networkId: string
+  private network: SolanaNetwork
 
   constructor(merchantWallet?: string) {
-    const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com'
-    const agentPrivateKey = process.env.AGENT_PRIVATE_KEY
+    const { network, rpcUrl, networkId } = resolveSolanaNetwork()
+    this.network = network
+    this.networkId = networkId
 
     // Allow merchant wallet from parameter or env variable
     if (merchantWallet) {
@@ -27,14 +31,14 @@ export class SettlementAgent {
     this.connection = new Connection(rpcUrl, 'confirmed')
     this.facilitator = new X402FacilitatorServer()
 
-    if (agentPrivateKey) {
-      try {
-        const privateKeyBytes = bs58.decode(agentPrivateKey)
-        this.agentWallet = Keypair.fromSecretKey(privateKeyBytes)
+    try {
+      const { keypair } = loadKeypairFromEnv()
+      if (keypair) {
+        this.agentWallet = keypair
         console.log(chalk.green(`✅ Settlement Agent initialized with wallet: ${this.agentWallet.publicKey.toBase58()}`))
-      } catch (error) {
-        console.error(chalk.red('❌ Failed to load agent wallet:'), error)
       }
+    } catch (error) {
+      console.error(chalk.red('❌ Failed to load agent wallet:'), error)
     }
   }
 
@@ -58,6 +62,7 @@ export class SettlementAgent {
       console.log(chalk.yellow('✅ SettlementAgent initialized for Solana'))
       console.log(`🆔 Agent ID: ${agentId}`)
       console.log(`🌐 RPC URL: ${process.env.SOLANA_RPC_URL}`)
+      console.log(`🌍 Network: ${this.network}`)
     } catch (error) {
       console.error('❌ Failed to initialize SettlementAgent:', error)
       throw error
@@ -81,7 +86,7 @@ export class SettlementAgent {
 
     return {
       scheme: 'exact' as const,
-      network: 'solana-devnet',
+      network: this.networkId,
       asset: process.env.USDC_MINT || '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
       payTo: this.merchantWallet,
       maxAmountRequired: amountInMicroUsdc.toString(),
@@ -146,7 +151,8 @@ export class SettlementAgent {
           to: requirements.payTo,
           value: requirements.maxAmountRequired,
           asset: requirements.asset,
-          validBefore: validBefore
+          validBefore: validBefore,
+          nonce: createNonce()
         }
       }
     }
@@ -203,8 +209,9 @@ export class SettlementAgent {
       const transaction = new Transaction().add(transferInstruction)
 
       // Get recent blockhash
-      const { blockhash } = await this.connection.getRecentBlockhash()
+      const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash('confirmed')
       transaction.recentBlockhash = blockhash
+      transaction.lastValidBlockHeight = lastValidBlockHeight
       transaction.feePayer = this.agentWallet.publicKey
 
       // Sign transaction
@@ -218,16 +225,21 @@ export class SettlementAgent {
       const paymentPayload = {
         x402Version: 1,
         scheme: 'exact',
-        network: 'solana-devnet',
+        network: this.networkId,
         payload: {
           authorization: {
             from: this.agentWallet.publicKey.toBase58(),
             to: recipientAddress,
             value: amountInMicroUsdc.toString(),
             asset: usdcMint.toBase58(),
-            validBefore: validBefore
+            validBefore: validBefore,
+            nonce: createNonce()
           },
-          signedTransaction: transaction.serialize().toString('base64')
+          signedTransaction: transaction.serialize().toString('base64'),
+          transactionMeta: {
+            blockhash,
+            lastValidBlockHeight
+          }
         }
       }
 

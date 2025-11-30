@@ -1,12 +1,9 @@
-import { Connection, PublicKey, Transaction, Keypair, sendAndConfirmTransaction } from '@solana/web3.js'
-import {
-  Token,
-  TOKEN_PROGRAM_ID,
-  ASSOCIATED_TOKEN_PROGRAM_ID
-} from '@solana/spl-token'
+import { Connection, PublicKey, Transaction, Keypair } from '@solana/web3.js'
+import { Token, TOKEN_PROGRAM_ID } from '@solana/spl-token'
 import { loadEnvIfNeeded } from '../utils/env'
+import { resolveSolanaNetwork } from '../utils/solana'
+import { loadKeypairFromEnv } from '../utils/wallet'
 import chalk from 'chalk'
-import bs58 from 'bs58'
 
 loadEnvIfNeeded()
 
@@ -14,26 +11,28 @@ export class X402FacilitatorServer {
   private connection: Connection
   private agentWallet?: Keypair
   private usdcMint: PublicKey
+  private networkId: string
+  private seenNonces: Map<string, number>
 
   constructor() {
-    const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com'
-    const agentPrivateKey = process.env.AGENT_PRIVATE_KEY
+    const { rpcUrl, networkId } = resolveSolanaNetwork()
     const usdcMint = process.env.USDC_MINT || '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'
 
     this.connection = new Connection(rpcUrl, 'confirmed')
     this.usdcMint = new PublicKey(usdcMint)
+    this.networkId = networkId
+    this.seenNonces = new Map()
 
-    if (agentPrivateKey) {
-      try {
-        const privateKeyBytes = bs58.decode(agentPrivateKey)
-        this.agentWallet = Keypair.fromSecretKey(privateKeyBytes)
+    try {
+      const { keypair } = loadKeypairFromEnv()
+      if (keypair) {
+        this.agentWallet = keypair
         console.log(chalk.green(`✅ Facilitator initialized with wallet: ${this.agentWallet.publicKey.toBase58()}`))
-      } catch (error) {
-        console.warn(chalk.yellow('⚠️  Invalid AGENT_PRIVATE_KEY format. Please provide a valid base58 encoded key.'))
-        console.warn(chalk.yellow('    Generate one with: solana-keygen new'))
+      } else {
+        console.warn(chalk.yellow('⚠️  AGENT_PRIVATE_KEY/AGENT_WALLET_PATH not configured. Some features will be unavailable.'))
       }
-    } else {
-      console.warn(chalk.yellow('⚠️  AGENT_PRIVATE_KEY not configured. Some features will be unavailable.'))
+    } catch (error) {
+      console.error(chalk.red('❌ Failed to load facilitator wallet:'), error)
     }
   }
 
@@ -43,14 +42,14 @@ export class X402FacilitatorServer {
 
       const paymentPayload = JSON.parse(Buffer.from(paymentHeader, 'base64').toString())
 
-      const isValid = this.validatePaymentLocally(paymentPayload, paymentRequirements)
+      const validation = await this.validatePaymentLocally(paymentPayload, paymentRequirements)
 
-      if (isValid) {
+      if (validation.isValid) {
         console.log(chalk.green('✅ Facilitator: Payment verification successful'))
         return { isValid: true, invalidReason: null }
       } else {
         console.log(chalk.red('❌ Facilitator: Payment verification failed'))
-        return { isValid: false, invalidReason: 'Local validation failed' }
+        return { isValid: false, invalidReason: validation.reason || 'Local validation failed' }
       }
     } catch (error) {
       console.error('❌ Facilitator: Verification error:', error)
@@ -61,50 +60,91 @@ export class X402FacilitatorServer {
     }
   }
 
-  private validatePaymentLocally(paymentPayload: any, requirements: any): boolean {
+  private async validatePaymentLocally(paymentPayload: any, requirements: any): Promise<{ isValid: boolean; reason?: string }> {
     try {
       if (paymentPayload.x402Version !== 1) {
         console.log(chalk.red('❌ Invalid x402 version'))
-        return false
+        return { isValid: false, reason: 'Invalid x402 version' }
       }
 
       if (paymentPayload.scheme !== requirements.scheme) {
         console.log(chalk.red('❌ Scheme mismatch'))
-        return false
+        return { isValid: false, reason: 'Scheme mismatch' }
       }
 
-      if (paymentPayload.network !== 'solana-devnet') {
-        console.log(chalk.red('❌ Network mismatch - expected solana-devnet'))
-        return false
+      if (paymentPayload.network !== this.networkId) {
+        console.log(chalk.red(`❌ Network mismatch - expected ${this.networkId}`))
+        return { isValid: false, reason: 'Network mismatch' }
       }
 
       const authorization = paymentPayload.payload?.authorization
       if (!authorization) {
         console.log(chalk.red('❌ No authorization found'))
-        return false
+        return { isValid: false, reason: 'No authorization found' }
       }
 
       if (authorization.value !== requirements.maxAmountRequired) {
         console.log(chalk.red('❌ Amount mismatch'))
-        return false
+        return { isValid: false, reason: 'Amount mismatch' }
       }
 
       if (authorization.to !== requirements.payTo) {
         console.log(chalk.red('❌ Recipient mismatch'))
-        return false
+        return { isValid: false, reason: 'Recipient mismatch' }
+      }
+
+      if (authorization.asset !== requirements.asset) {
+        console.log(chalk.red('❌ Asset mint mismatch'))
+        return { isValid: false, reason: 'Asset mismatch' }
       }
 
       const now = Math.floor(Date.now() / 1000)
-      if (authorization.validBefore && now > authorization.validBefore) {
-        console.log(chalk.red('❌ Payment expired'))
-        return false
+      if (!authorization.validBefore || now > authorization.validBefore) {
+        console.log(chalk.red('❌ Payment expired or missing validBefore'))
+        return { isValid: false, reason: 'Payment expired' }
+      }
+
+      if (requirements.maxTimeoutSeconds && authorization.validBefore - now > requirements.maxTimeoutSeconds + 30) {
+        console.log(chalk.red('❌ validBefore too far in the future'))
+        return { isValid: false, reason: 'Invalid validity window' }
+      }
+
+      const nonce = authorization.nonce
+      if (!nonce) {
+        console.log(chalk.red('❌ Missing nonce'))
+        return { isValid: false, reason: 'Missing nonce' }
+      }
+
+      this.cleanupNonces()
+      if (this.seenNonces.has(nonce)) {
+        console.log(chalk.red('❌ Replay detected (nonce already used)'))
+        return { isValid: false, reason: 'Replay detected' }
+      }
+
+      this.seenNonces.set(nonce, authorization.validBefore)
+
+      await this.validateMintDecimals(authorization.asset)
+
+      if (paymentPayload.payload?.transactionMeta?.lastValidBlockHeight) {
+        const currentHeight = await this.connection.getBlockHeight('confirmed')
+        if (currentHeight > paymentPayload.payload.transactionMeta.lastValidBlockHeight) {
+          console.log(chalk.red('❌ Transaction blockhash expired'))
+          return { isValid: false, reason: 'Blockhash expired' }
+        }
+      }
+
+      if (paymentPayload.payload?.signedTransaction) {
+        const txValidation = await this.validateSignedTransaction(paymentPayload)
+        if (!txValidation.isValid) {
+          return txValidation
+        }
       }
 
       console.log(chalk.green('✅ All local validations passed'))
-      return true
+      return { isValid: true }
     } catch (error) {
       console.error('❌ Local validation error:', error)
-      return false
+      return { isValid: false, reason: (error as Error).message }
     }
   }
 
@@ -119,13 +159,13 @@ export class X402FacilitatorServer {
       if (txHash) {
         console.log(chalk.green('✅ Facilitator: Payment settled successfully'))
         console.log(chalk.blue(`📋 Transaction Signature: ${txHash}`))
-        console.log(chalk.blue(`📋 Network: solana-devnet`))
+        console.log(chalk.blue(`📋 Network: ${this.networkId}`))
 
         return {
           success: true,
           error: null,
           txHash: txHash,
-          networkId: 'solana-devnet'
+          networkId: this.networkId
         }
       } else {
         console.log(chalk.red('❌ Facilitator: Payment settlement failed'))
@@ -171,19 +211,10 @@ export class X402FacilitatorServer {
         const transaction = Transaction.from(transactionBuffer)
 
         console.log(chalk.yellow('📋 Submitting pre-signed transaction to Solana...'))
-
-        // Submit the pre-signed transaction
-        const signature = await this.connection.sendRawTransaction(
-          transaction.serialize(),
-          {
-            skipPreflight: false,
-            preflightCommitment: 'confirmed'
-          }
+        const signature = await this.sendTransactionWithRetry(
+          transaction,
+          paymentPayload.payload.transactionMeta
         )
-
-        // Wait for confirmation
-        await this.connection.confirmTransaction(signature, 'confirmed')
-
         console.log(chalk.green(`✅ Transaction confirmed: ${signature}`))
         return signature
 
@@ -240,10 +271,134 @@ export class X402FacilitatorServer {
     }
   }
 
+  private async validateMintDecimals(mintAddress: string): Promise<void> {
+    const parsed = await this.connection.getParsedAccountInfo(new PublicKey(mintAddress))
+    const decimals = (parsed.value as any)?.data?.parsed?.info?.decimals
+
+    if (!parsed.value) {
+      throw new Error('Mint account not found')
+    }
+
+    if (decimals !== 6) {
+      throw new Error('Unexpected mint decimals (expected 6 for USDC)')
+    }
+  }
+
+  private cleanupNonces(): void {
+    const now = Math.floor(Date.now() / 1000)
+    for (const [nonce, expiry] of this.seenNonces.entries()) {
+      if (expiry <= now) {
+        this.seenNonces.delete(nonce)
+      }
+    }
+  }
+
+  private async validateSignedTransaction(paymentPayload: any): Promise<{ isValid: boolean; reason?: string }> {
+    const authorization = paymentPayload.payload?.authorization
+    const signedTransactionBase64 = paymentPayload.payload?.signedTransaction
+
+    if (!signedTransactionBase64) {
+      return { isValid: true }
+    }
+
+    if (!authorization) {
+      return { isValid: false, reason: 'Missing authorization block' }
+    }
+
+    try {
+      const transactionBuffer = Buffer.from(signedTransactionBase64, 'base64')
+      const transaction = Transaction.from(transactionBuffer)
+
+      if (!transaction.verifySignatures()) {
+        return { isValid: false, reason: 'Invalid transaction signature' }
+      }
+
+      const instruction = transaction.instructions.find((ix) => ix.programId.equals(TOKEN_PROGRAM_ID))
+      if (!instruction) {
+        return { isValid: false, reason: 'Missing token transfer instruction' }
+      }
+
+      if (!instruction.data || instruction.data.length < 9 || instruction.data[0] !== 3) {
+        return { isValid: false, reason: 'Invalid transfer instruction data' }
+      }
+
+      const amount = this.readU64(instruction.data.subarray(1, 9))
+      if (amount.toString() !== authorization.value) {
+        return { isValid: false, reason: 'Transfer amount mismatch' }
+      }
+
+      const destination = instruction.keys?.[1]?.pubkey
+      if (!destination) {
+        return { isValid: false, reason: 'Missing destination account' }
+      }
+
+      const destinationAccount = await this.connection.getParsedAccountInfo(destination)
+      const destinationOwner = (destinationAccount.value as any)?.data?.parsed?.info?.owner
+      const destinationMint = (destinationAccount.value as any)?.data?.parsed?.info?.mint
+
+      if (!destinationAccount.value) {
+        return { isValid: false, reason: 'Destination account not found' }
+      }
+
+      if (destinationOwner !== authorization.to) {
+        return { isValid: false, reason: 'Destination owner mismatch' }
+      }
+
+      if (destinationMint !== authorization.asset) {
+        return { isValid: false, reason: 'Destination mint mismatch' }
+      }
+
+      return { isValid: true }
+    } catch (error) {
+      return { isValid: false, reason: (error as Error).message }
+    }
+  }
+
+  private readU64(buffer: Buffer): bigint {
+    return buffer.readBigUInt64LE(0)
+  }
+
+  private async sendTransactionWithRetry(transaction: Transaction, meta?: { blockhash?: string; lastValidBlockHeight?: number }): Promise<string> {
+    const maxAttempts = 3
+    const backoffMs = [500, 1000, 1500]
+    let lastError: unknown
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const signature = await this.connection.sendRawTransaction(
+          transaction.serialize(),
+          {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed'
+          }
+        )
+
+        if (meta?.blockhash && meta?.lastValidBlockHeight) {
+          await this.connection.confirmTransaction({
+            signature,
+            blockhash: meta.blockhash,
+            lastValidBlockHeight: meta.lastValidBlockHeight
+          }, 'confirmed')
+        } else {
+          await this.connection.confirmTransaction(signature, 'confirmed')
+        }
+
+        return signature
+      } catch (error) {
+        lastError = error
+        if (attempt < maxAttempts - 1) {
+          await new Promise((resolve) => setTimeout(resolve, backoffMs[attempt]))
+        }
+      }
+    }
+
+    throw new Error(`Failed to send transaction after retries: ${String(lastError)}`)
+  }
+
   getSupportedSchemes(): { kinds: Array<{ scheme: string; network: string }> } {
     return {
       kinds: [
-        { scheme: 'exact', network: 'solana-devnet' }
+        { scheme: 'exact', network: this.networkId }
       ]
     }
   }

@@ -20,16 +20,6 @@
       "require": "./dist/src/protocols/index.js",
       "types": "./dist/src/protocols/index.d.ts"
     },
-    "./services": {
-      "import": "./dist/src/services/index.js",
-      "require": "./dist/src/services/index.js",
-      "types": "./dist/src/services/index.d.ts"
-    },
-    "./modes": {
-      "import": "./dist/src/modes/index.js",
-      "require": "./dist/src/modes/index.js",
-      "types": "./dist/src/modes/index.d.ts"
-    },
     "./facilitator": {
       "import": "./dist/src/facilitator/index.js",
       "require": "./dist/src/facilitator/index.js",
