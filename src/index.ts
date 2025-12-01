@@ -6,7 +6,19 @@
  * @packageDocumentation
  */
 
-import packageJson from '../package.json'
+import path from 'path'
+
+function resolvePackageMetadata() {
+  try {
+    // dist/src -> project root via ../../package.json
+    const pkg = require(path.resolve(__dirname, '..', '..', 'package.json'))
+    return { name: pkg.name as string, version: pkg.version as string }
+  } catch (error) {
+    return { name: 'aether-agent-sdk', version: 'unknown' }
+  }
+}
+
+const pkg = resolvePackageMetadata()
 
 // Agents
 export * from './agents'
@@ -23,9 +35,9 @@ export * from './utils'
 /**
  * SDK Version
  */
-export const VERSION = packageJson.version
+export const VERSION = pkg.version
 
 /**
  * SDK Name
  */
-export const SDK_NAME = packageJson.name
+export const SDK_NAME = pkg.name
