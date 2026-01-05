@@ -5,3 +5,5 @@
  */
 
 export { X402FacilitatorServer } from './X402FacilitatorServer'
+export type { X402FacilitatorConfig } from './X402FacilitatorServer'
+export type { NetworkRpcConfig } from '../utils/solana'

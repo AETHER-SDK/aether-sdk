@@ -1,27 +1,42 @@
 import { Connection, PublicKey, Transaction, Keypair } from '@solana/web3.js'
 import { Token, TOKEN_PROGRAM_ID } from '@solana/spl-token'
 import { loadEnvIfNeeded } from '../utils/env'
-import { resolveSolanaNetwork } from '../utils/solana'
+import {
+  resolveSolanaNetwork,
+  resolveRpcUrlForNetwork,
+  networkIdToNetwork,
+  networkToId,
+  SolanaNetwork,
+  NetworkRpcConfig
+} from '../utils/solana'
 import { loadKeypairFromEnv } from '../utils/wallet'
 import { createLogger } from '../utils/logger'
 
 loadEnvIfNeeded()
 
+export interface X402FacilitatorConfig {
+  /** Network-specific RPC URLs (optional, falls back to env vars or public endpoints) */
+  rpcConfig?: NetworkRpcConfig
+  /** Default USDC mint address */
+  usdcMint?: string
+}
+
 export class X402FacilitatorServer {
-  private connection: Connection
+  private connections: Map<SolanaNetwork, Connection> = new Map()
   private agentWallet?: Keypair
   private usdcMint: PublicKey
-  private networkId: string
+  private defaultNetworkId: string
+  private rpcConfig: NetworkRpcConfig | undefined
   private seenNonces: Map<string, number>
   private logger = createLogger('X402Facilitator')
 
-  constructor() {
-    const { rpcUrl, networkId } = resolveSolanaNetwork()
-    const usdcMint = process.env.USDC_MINT || '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'
+  constructor(config?: X402FacilitatorConfig) {
+    const { networkId } = resolveSolanaNetwork()
+    const usdcMint = config?.usdcMint || process.env.USDC_MINT || '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'
 
-    this.connection = new Connection(rpcUrl, 'confirmed')
+    this.rpcConfig = config?.rpcConfig
     this.usdcMint = new PublicKey(usdcMint)
-    this.networkId = networkId
+    this.defaultNetworkId = networkId
     this.seenNonces = new Map()
 
     try {
@@ -35,6 +50,43 @@ export class X402FacilitatorServer {
     } catch (error) {
       this.logger.error('Failed to load facilitator wallet', error)
     }
+
+    this.logger.info(`Default network: ${this.defaultNetworkId}`)
+    if (this.rpcConfig) {
+      this.logger.info('Custom RPC configuration provided')
+    }
+  }
+
+  /**
+   * Get or create a connection for a specific network
+   * Connections are cached for reuse
+   */
+  private getConnection(networkId: string): Connection {
+    const network = networkIdToNetwork(networkId)
+
+    let connection = this.connections.get(network)
+    if (!connection) {
+      const rpcUrl = resolveRpcUrlForNetwork(network, this.rpcConfig)
+      this.logger.debug(`Creating connection for ${network}: ${rpcUrl}`)
+      connection = new Connection(rpcUrl, 'confirmed')
+      this.connections.set(network, connection)
+    }
+
+    return connection
+  }
+
+  /**
+   * Get the default connection (for backward compatibility)
+   */
+  private get connection(): Connection {
+    return this.getConnection(this.defaultNetworkId)
+  }
+
+  /**
+   * Get networkId (for backward compatibility)
+   */
+  private get networkId(): string {
+    return this.defaultNetworkId
   }
 
   async verify(paymentHeader: string, paymentRequirements: any): Promise<any> {
@@ -73,10 +125,15 @@ export class X402FacilitatorServer {
         return { isValid: false, reason: 'Scheme mismatch' }
       }
 
-      if (paymentPayload.network !== this.networkId) {
-        this.logger.warn(`Network mismatch - expected ${this.networkId}`)
+      // Network validation: check against requirements.network if provided, otherwise use payload's network
+      const expectedNetwork = requirements.network || paymentPayload.network
+      if (paymentPayload.network !== expectedNetwork) {
+        this.logger.warn(`Network mismatch - expected ${expectedNetwork}, got ${paymentPayload.network}`)
         return { isValid: false, reason: 'Network mismatch' }
       }
+
+      // Get the connection for this payment's network
+      const connection = this.getConnection(paymentPayload.network)
 
       const authorization = paymentPayload.payload?.authorization
       if (!authorization) {
@@ -124,10 +181,10 @@ export class X402FacilitatorServer {
 
       this.seenNonces.set(nonce, authorization.validBefore)
 
-      await this.validateMintDecimals(authorization.asset)
+      await this.validateMintDecimals(authorization.asset, connection)
 
       if (paymentPayload.payload?.transactionMeta?.lastValidBlockHeight) {
-        const currentHeight = await this.connection.getBlockHeight('confirmed')
+        const currentHeight = await connection.getBlockHeight('confirmed')
         if (currentHeight > paymentPayload.payload.transactionMeta.lastValidBlockHeight) {
           this.logger.warn('Transaction blockhash expired')
           return { isValid: false, reason: 'Blockhash expired' }
@@ -135,7 +192,7 @@ export class X402FacilitatorServer {
       }
 
       if (paymentPayload.payload?.signedTransaction) {
-        const txValidation = await this.validateSignedTransaction(paymentPayload)
+        const txValidation = await this.validateSignedTransaction(paymentPayload, connection)
         if (!txValidation.isValid) {
           return txValidation
         }
@@ -155,18 +212,24 @@ export class X402FacilitatorServer {
 
       const paymentPayload = JSON.parse(Buffer.from(paymentHeader, 'base64').toString())
 
-      const txHash = await this.executeUSDCTransfer(paymentPayload, paymentRequirements)
+      // Determine network from payload or requirements
+      const paymentNetworkId = paymentPayload.network || paymentRequirements.network || this.defaultNetworkId
+      const connection = this.getConnection(paymentNetworkId)
+
+      this.logger.info(`Using network: ${paymentNetworkId}`)
+
+      const txHash = await this.executeUSDCTransfer(paymentPayload, paymentRequirements, connection)
 
       if (txHash) {
         this.logger.info('Payment settled successfully')
         this.logger.info(`Transaction Signature: ${txHash}`)
-        this.logger.info(`Network: ${this.networkId}`)
+        this.logger.info(`Network: ${paymentNetworkId}`)
 
         return {
           success: true,
           error: null,
           txHash: txHash,
-          networkId: this.networkId
+          networkId: paymentNetworkId
         }
       } else {
         this.logger.warn('Payment settlement failed')
@@ -188,7 +251,7 @@ export class X402FacilitatorServer {
     }
   }
 
-  private async executeUSDCTransfer(paymentPayload: any, requirements: any): Promise<string | null> {
+  private async executeUSDCTransfer(paymentPayload: any, requirements: any, connection: Connection): Promise<string | null> {
     try {
       this.logger.info('Processing x402 payment on Solana')
 
@@ -205,7 +268,7 @@ export class X402FacilitatorServer {
         this.logger.info('Pre-signed transaction detected (standard x402 flow)')
         this.logger.debug(`From: ${authorization.from}`)
         this.logger.debug(`To: ${authorization.to}`)
-        this.logger.debug(`Amount: ${Number(authorization.value) / 1_000_000} USDC`)
+        this.logger.debug(`Amount: ${Number(authorization.value) / 1_000_000} tokens`)
 
         // Deserialize the transaction
         const transactionBuffer = Buffer.from(signedTransactionBase64, 'base64')
@@ -214,7 +277,8 @@ export class X402FacilitatorServer {
         this.logger.info('Submitting pre-signed transaction to Solana')
         const signature = await this.sendTransactionWithRetry(
           transaction,
-          paymentPayload.payload.transactionMeta
+          paymentPayload.payload.transactionMeta,
+          connection
         )
         this.logger.info(`Transaction confirmed: ${signature}`)
         return signature
@@ -231,7 +295,7 @@ export class X402FacilitatorServer {
         const amount = Number(authorization.value)
 
         const token = new Token(
-          this.connection,
+          connection,
           this.usdcMint,
           TOKEN_PROGRAM_ID,
           this.agentWallet
@@ -272,8 +336,8 @@ export class X402FacilitatorServer {
     }
   }
 
-  private async validateMintDecimals(mintAddress: string): Promise<void> {
-    const parsed = await this.connection.getParsedAccountInfo(new PublicKey(mintAddress))
+  private async validateMintDecimals(mintAddress: string, connection: Connection): Promise<void> {
+    const parsed = await connection.getParsedAccountInfo(new PublicKey(mintAddress))
     const decimals = (parsed.value as any)?.data?.parsed?.info?.decimals
 
     if (!parsed.value) {
@@ -281,7 +345,7 @@ export class X402FacilitatorServer {
     }
 
     if (decimals !== 6) {
-      throw new Error('Unexpected mint decimals (expected 6 for USDC)')
+      throw new Error('Unexpected mint decimals (expected 6 for USDC/ATHR)')
     }
   }
 
@@ -294,7 +358,7 @@ export class X402FacilitatorServer {
     }
   }
 
-  private async validateSignedTransaction(paymentPayload: any): Promise<{ isValid: boolean; reason?: string }> {
+  private async validateSignedTransaction(paymentPayload: any, connection: Connection): Promise<{ isValid: boolean; reason?: string }> {
     const authorization = paymentPayload.payload?.authorization
     const signedTransactionBase64 = paymentPayload.payload?.signedTransaction
 
@@ -333,7 +397,7 @@ export class X402FacilitatorServer {
         return { isValid: false, reason: 'Missing destination account' }
       }
 
-      const destinationAccount = await this.connection.getParsedAccountInfo(destination)
+      const destinationAccount = await connection.getParsedAccountInfo(destination)
       const destinationOwner = (destinationAccount.value as any)?.data?.parsed?.info?.owner
       const destinationMint = (destinationAccount.value as any)?.data?.parsed?.info?.mint
 
@@ -359,14 +423,18 @@ export class X402FacilitatorServer {
     return buffer.readBigUInt64LE(0)
   }
 
-  private async sendTransactionWithRetry(transaction: Transaction, meta?: { blockhash?: string; lastValidBlockHeight?: number }): Promise<string> {
+  private async sendTransactionWithRetry(
+    transaction: Transaction,
+    meta: { blockhash?: string; lastValidBlockHeight?: number } | undefined,
+    connection: Connection
+  ): Promise<string> {
     const maxAttempts = 3
     const backoffMs = [500, 1000, 1500]
     let lastError: unknown
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        const signature = await this.connection.sendRawTransaction(
+        const signature = await connection.sendRawTransaction(
           transaction.serialize(),
           {
             skipPreflight: false,
@@ -375,13 +443,13 @@ export class X402FacilitatorServer {
         )
 
         if (meta?.blockhash && meta?.lastValidBlockHeight) {
-          await this.connection.confirmTransaction({
+          await connection.confirmTransaction({
             signature,
             blockhash: meta.blockhash,
             lastValidBlockHeight: meta.lastValidBlockHeight
           }, 'confirmed')
         } else {
-          await this.connection.confirmTransaction(signature, 'confirmed')
+          await connection.confirmTransaction(signature, 'confirmed')
         }
 
         return signature
@@ -396,10 +464,15 @@ export class X402FacilitatorServer {
     throw new Error(`Failed to send transaction after retries: ${String(lastError)}`)
   }
 
+  /**
+   * Get supported payment schemes
+   * Returns all networks that can be handled (devnet and mainnet-beta)
+   */
   getSupportedSchemes(): { kinds: Array<{ scheme: string; network: string }> } {
     return {
       kinds: [
-        { scheme: 'exact', network: this.networkId }
+        { scheme: 'exact', network: 'solana-devnet' },
+        { scheme: 'exact', network: 'solana-mainnet-beta' }
       ]
     }
   }
